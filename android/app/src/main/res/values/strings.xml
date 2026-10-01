@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">StaffSaaSMobile</string>
+
+    <!--
+      FCM fallback channel. Referenced by the `default_notification_channel_id`
+      meta-data in AndroidManifest.xml and created at runtime by the push service.
+      Its id MUST stay in sync with FCM_ANDROID_CHANNEL_ID in the .env files.
+    -->
+    <string name="default_notification_channel_id" translatable="false">staffsaas_default</string>
+</resources>

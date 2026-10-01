@@ -1,0 +1,8 @@
+process.cwd()       = c:\laragon\www\StaffSaaSMobile
+__dirname           = c:\laragon\www\StaffSaaSMobile
+realpath.native     = C:\laragon\www\StaffSaaSMobile
+resolve require.js  = c:\laragon\www\StaffSaaSMobile\node_modules\metro-runtime\src\polyfills\require.js
+resolve asyncRequire= c:\laragon\www\StaffSaaSMobile\node_modules\metro-runtime\src\modules\asyncRequire.js
+resolve empty-module= c:\laragon\www\StaffSaaSMobile\node_modules\metro-runtime\src\modules\empty-module.js
+resolve babel-xform = c:\laragon\www\StaffSaaSMobile\node_modules\@react-native\metro-babel-transformer\src\index.js
+resolve setup-env   = c:\laragon\www\StaffSaaSMobile\node_modules\react-native\src\setup-env.js

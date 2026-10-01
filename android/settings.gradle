@@ -1,0 +1,21 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'StaffSaaSMobile'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')
+
+/**
+ * Firebase Cloud Messaging.
+ *
+ * The Google Services Gradle plugin is deliberately NOT applied here. `settings.gradle`
+ * is evaluated before the root project's `buildscript` classpath is resolved, so an
+ * `apply plugin` at this scope fails with:
+ *   "Plugin with id 'com.google.gms.google-services' not found."
+ *
+ * It is applied instead in `app/build.gradle`, where the classpath declared in the root
+ * `build.gradle` is visible, and only when `app/google-services.json` exists. That file
+ * is gitignored (it carries per-environment Firebase identifiers) and the plugin
+ * hard-fails the build when it is missing, so the conditional keeps `npm run android`
+ * working for contributors without Firebase credentials.
+ */

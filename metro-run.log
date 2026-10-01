@@ -1,0 +1,174 @@
+
+Welcome to React Native v0.87
+Starting dev server on http://localhost:8081
+
+
+                        ▒▒▓▓▓▓▒▒
+                     ▒▓▓▓▒▒░░▒▒▓▓▓▒
+                  ▒▓▓▓▓░░░▒▒▒▒░░░▓▓▓▓▒
+                 ▓▓▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▓▓
+                 ▓▓░░░░░▒▓▓▓▓▓▓▒░░░░░▓▓
+                 ▓▓░░▓▓▒░░░▒▒░░░▒▓▒░░▓▓
+                 ▓▓░░▓▓▓▓▓▒▒▒▒▓▓▓▓▒░░▓▓
+                 ▓▓░░▓▓▓▓▓▓▓▓▓▓▓▓▓▒░░▓▓
+                 ▓▓▒░░▒▒▓▓▓▓▓▓▓▓▒░░░▒▓▓
+                  ▒▓▓▓▒░░░▒▓▓▒░░░▒▓▓▓▒
+                     ▒▓▓▓▒░░░░▒▓▓▓▒
+                        ▒▒▓▓▓▓▒▒
+
+
+ WARN  the transform cache was reset.
+                Welcome to Metro v0.87.1
+              Fast - Scalable - Integrated
+
+
+ INFO  Dev server ready. Press Ctrl+C to exit.
+ INFO  Interactive mode is not supported in this environment
+ BUNDLE  ./index.js ░░░░░░░░░░░░░░░░ 0% (0/1)
+ BUNDLE  ./index.js ░░░░░░░░░░░░░░░░ 1% (1/1)
+ BUNDLE  ./index.js ░░░░░░░░░░░░░░░░ 1% (1/7)
+ BUNDLE  ./index.js ░░░░░░░░░░░░░░░░ 4% (2/7)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (8/123)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (23/164)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (32/223)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (43/246)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (52/266)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (70/279)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (86/294)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (100/314)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (113/320)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (123/327)
+ BUNDLE  ./index.js ▓▓░░░░░░░░░░░░░░ 16% (137/338)
+ BUNDLE  ./index.js ▓▓▓░░░░░░░░░░░░░ 20% (152/339)
+ BUNDLE  ./index.js ▓▓▓░░░░░░░░░░░░░ 21% (166/363)
+ BUNDLE  ./index.js ▓▓▓░░░░░░░░░░░░░ 23% (182/381)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 26% (202/393)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 26% (221/436)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 27% (239/454)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 28% (250/465)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 28% (264/493)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 29% (277/511)
+ BUNDLE  ./index.js ▓▓▓▓░░░░░░░░░░░░ 30% (292/526)
+ BUNDLE  ./index.js ▓▓▓▓▓░░░░░░░░░░░ 32% (307/542)
+ BUNDLE  ./index.js ▓▓▓▓▓░░░░░░░░░░░ 32% (321/564)
+ BUNDLE  ./index.js ▓▓▓▓▓░░░░░░░░░░░ 34% (339/577)
+ BUNDLE  ./index.js ▓▓▓▓▓░░░░░░░░░░░ 35% (346/579)
+ BUNDLE  ./index.js ▓▓▓▓▓░░░░░░░░░░░ 37% (354/581)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (365/584)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (371/626)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (382/627)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (393/650)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (411/675)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (430/736)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (446/770)
+ WARN  Attempted to import the module "C:\laragon\www\StaffSaaSMobile\node_modules\react-native\src\private\featureflags\ReactNativeFeatureFlags" which is not listed in the "exports" of "C:\laragon\www\StaffSaaSMobile\node_modules\react-native" under the requested subpath "./src/private/featureflags/ReactNativeFeatureFlags". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (460/781)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (470/793)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (478/796)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 39% (492/796)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 40% (508/802)
+ BUNDLE  ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 42% (525/809)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 44% (547/817)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 46% (559/820)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 48% (573/826)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 48% (587/846)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 48% (599/867)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 48% (612/899)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 48% (626/907)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓░░░░░░░░░ 48% (637/911)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (652/917)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (667/991)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (686/1012)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (698/1023)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (716/1043)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (732/1056)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (753/1088)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (774/1102)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 50% (788/1115)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 51% (806/1125)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 51% (819/1137)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53% (835/1143)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53% (848/1182)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53% (861/1184)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53% (873/1208)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53% (888/1218)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 54% (907/1234)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 54% (920/1241)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 56% (936/1245)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 58% (952/1248)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 58% (971/1277)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 59% (990/1280)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 61% (1009/1282)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 63% (1027/1285)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 65% (1045/1291)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 65% (1057/1306)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 65% (1069/1319)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 66% (1083/1333)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 67% (1099/1333)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 69% (1118/1344)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 70% (1134/1353)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 71% (1152/1369)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72% (1164/1369)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73% (1174/1369)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 74% (1183/1370)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 74% (1198/1396)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 75% (1217/1405)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 75% (1236/1429)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 76% (1252/1433)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 78% (1272/1437)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1289/1447)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1306/1540)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1323/1548)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1339/1553)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1353/1560)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1364/1569)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1378/1571)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1391/1575)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1406/1584)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 79% (1428/1603)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 80% (1451/1617)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 82% (1468/1617)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 83% (1481/1620)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 84% (1495/1627)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 85% (1507/1631)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 87% (1527/1632)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 89% (1550/1636)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 91% (1564/1638)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92% (1579/1641)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92% (1590/1656)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92% (1607/1667)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 94% (1627/1678)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 94% (1650/1698)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95% (1671/1708)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96% (1687/1725)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96% (1707/1758)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96% (1721/1770)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96% (1736/1779)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96% (1753/1787)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97% (1766/1795)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97% (1783/1808)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 98% (1799/1814)
+ BUNDLE  ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99% (1813/1816)
+ BUNDLE  ./index.js 
+ ERROR  Error: Unable to resolve module c:\laragon\www\StaffSaaSMobile\node_modules\metro-runtime\src\modules\asyncRequire.js from C:\laragon\www\StaffSaaSMobile\src\services\push\pushService.ts: 
+
+None of these files exist:
+  * node_modules\metro-runtime\src\modules\asyncRequire.js(.android.js|.native.js|.js|.android.jsx|.native.jsx|.jsx|.android.json|.native.json|.json|.android.ts|.native.ts|.ts|.android.tsx|.native.tsx|.tsx)
+  * node_modules\metro-runtime\src\modules\asyncRequire.js
+  193 |         // that is unavailable in a plain Jest environment, and this helper is only
+  194 |         // reached once push is known to be configured.
+> 195 |         const { default: notifee } = await import('@notifee/react-native');
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  196 |
+  197 |         await notifee.createChannel({
+  198 |             id: env.fcm.androidChannelId,
+    at ModuleResolver.resolveDependency (C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\node-haste\DependencyGraph\ModuleResolution.js:145:15)
+    at DependencyGraph.resolveDependency (C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\node-haste\DependencyGraph.js:203:43)
+    at C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\lib\transformHelpers.js:165:21
+    at resolveDependencies (C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\DeltaBundler\buildSubgraph.js:43:25)
+    at visit (C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\DeltaBundler\buildSubgraph.js:81:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Promise.all (index 1)
+    at async visit (C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\DeltaBundler\buildSubgraph.js:90:5)
+    at async Promise.all (index 3)
+    at async visit (C:\laragon\www\StaffSaaSMobile\node_modules\metro\src\DeltaBundler\buildSubgraph.js:90:5)

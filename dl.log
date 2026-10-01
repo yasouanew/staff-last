@@ -1,0 +1,15 @@
+  console.log
+    [motion][diag] react-native easing worklet markers {
+      standard: false,
+      decelerate: false,
+      accelerate: false,
+      linear: false
+    }
+
+      at Object.log (src/theme/motion.ts:69:13)
+
+  console.log
+    [motion][diag] reanimated easing worklet markers { decelerate: false, accelerate: false, linear: false }
+
+      at Object.log (src/theme/motion.ts:76:13)
+

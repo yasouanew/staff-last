@@ -1,0 +1,27 @@
+buildscript {
+    ext {
+        buildToolsVersion = "37.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 37
+        targetSdkVersion = 36
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.2.0"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+
+        // Google Services: turns android/app/google-services.json into resources the
+        // Firebase SDKs read at runtime. The plugin itself is applied in
+        // `settings.gradle`, and only when that file exists (it is gitignored), so
+        // declaring the classpath here is safe for contributors without credentials.
+        classpath("com.google.gms:google-services:4.4.4")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"

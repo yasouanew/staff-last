@@ -1,0 +1,43 @@
+﻿  console.log
+    [motion][diag] react-native easing worklet markers {
+      standard: false,
+      decelerate: false,
+      accelerate: false,
+      linear: false
+    }
+
+      at Object.log (src/theme/motion.ts:69:13)
+
+  console.log
+    [motion][diag] reanimated easing worklet markers { decelerate: false, accelerate: false, linear: false }
+
+      at Object.log (src/theme/motion.ts:76:13)
+
+  console.log
+    TIMERS []
+
+      at Object.log (__tests__/screens/__probe.test.tsx:32:17)
+
+  console.log
+    TIMERS []
+
+      at Object.log (__tests__/screens/__probe.test.tsx:32:17)
+
+node.exe : PASS __tests__/screens/__probe.test.tsx (7.703 s)
+At C:\nvm4w\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS __tests__/...t.tsx (7.703 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  probe
+    √ GET only (control) (123 ms)
+    √ marks all read successfully (151 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        8.302 s
+Ran all test suites matching /__tests__\\screens\\__probe.test.tsx/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after 
+all tests finished?

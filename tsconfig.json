@@ -1,0 +1,68 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    // `paths` targets are written relative to this config's directory (e.g. `./src/*`).
+    // TypeScript 6.0 deprecated `baseUrl` — it stops functioning in TS 7 — and using a
+    // non-relative target without it raises TS5090. Keeping every target relative avoids
+    // the deprecated option entirely, so no `ignoreDeprecations` workaround is needed
+    // (and the value that workaround required, `"6.0"`, is rejected by older language
+    // services with TS5103 "Invalid value for '--ignoreDeprecations'").
+    // The Babel `module-resolver` aliases in `babel.config.js` must stay in sync with
+    // these entries.
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@api/*": [
+        "./src/api/*"
+      ],
+      "@app/*": [
+        "./src/app/*"
+      ],
+      "@components/*": [
+        "./src/components/*"
+      ],
+      "@config/*": [
+        "./src/config/*"
+      ],
+      "@features/*": [
+        "./src/features/*"
+      ],
+      "@hooks/*": [
+        "./src/hooks/*"
+      ],
+      "@navigation/*": [
+        "./src/navigation/*"
+      ],
+      "@store/*": [
+        "./src/store/*"
+      ],
+      "@theme/*": [
+        "./src/theme/*"
+      ],
+      "@types/*": [
+        "./src/types/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ]
+    },
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/Pods",
+    "android",
+    "ios",
+    // Reference app used only as a source of visual/design inspiration. It is not part
+    // of this project's build and does not typecheck against our configuration, so it
+    // must stay out of the program or every `tsc` run drowns in its errors.
+    "soft-ui-react-native-main"
+  ]
+}

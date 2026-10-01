@@ -1,0 +1,15 @@
+﻿node.exe : PASS src/features/notifications/store/__tests__/notificationInboxStore.test.ts
+At C:\nvm4w\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/featur...oxStore.test.ts:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+PASS src/features/notifications/utils/__tests__/inboxMerge.test.ts
+PASS src/features/notifications/hooks/__tests__/useInbox.test.tsx
+
+Test Suites: 3 passed, 3 total
+Tests:       22 passed, 22 total
+Snapshots:   0 total
+Time:        4.564 s
+Ran all test suites matching /src\\features\\notifications/i.

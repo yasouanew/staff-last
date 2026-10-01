@@ -1,0 +1,18 @@
+﻿node.exe : PASS __tests__/navigation/sessionExpiry.test.tsx (8.395 s)
+At C:\nvm4w\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS __tests__/...t.tsx (8.395 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+PASS __tests__/navigation/deepLinking.test.tsx (8.464 s)
+PASS __tests__/navigation/coldStart.test.tsx (8.563 s)
+PASS __tests__/navigation/edgeNavigation.test.tsx (9.562 s)
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due 
+to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure 
+that .unref() was called on them.
+
+Test Suites: 4 passed, 4 total
+Tests:       20 passed, 20 total
+Snapshots:   0 total
+Time:        11.044 s

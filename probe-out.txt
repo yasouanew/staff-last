@@ -1,0 +1,15 @@
+rootDir: C:\laragon\www\StaffSaaSMobile
+build done
+total files: 35796
+target present in getAllFiles: true
+getOrComputeSha1 (lowercase root): { sha1: 'd72046f13a2409dfd8baf05def7647a2837b92ef' }
+asyncRequire lookup: {"exists":true,"links":{},"realPath":"C:\\laragon\\www\\StaffSaaSMobile\\node_modules\\metro-runtime\\src\\modules\\asyncRequire.js","type":"f","metadata":[1790521420854,1104,1,"c61dc97d3458b519d9a560a777452c53a41d70bb",0,null]}
+asyncRequire lookup (lowercase drive): {"exists":false,"links":{},"missing":"c:"}
+metro-runtime files count: 9
+sample: [
+  'C:\\laragon\\www\\StaffSaaSMobile\\node_modules\\metro-runtime\\package.json',
+  'C:\\laragon\\www\\StaffSaaSMobile\\node_modules\\metro-runtime\\src\\modules\\asyncRequire.js',
+  'C:\\laragon\\www\\StaffSaaSMobile\\node_modules\\metro-runtime\\src\\modules\\empty-module.js',
+  'C:\\laragon\\www\\StaffSaaSMobile\\node_modules\\metro-runtime\\src\\modules\\HMRClient.js',
+  'C:\\laragon\\www\\StaffSaaSMobile\\node_modules\\metro-runtime\\src\\modules\\null-module.js'
+]

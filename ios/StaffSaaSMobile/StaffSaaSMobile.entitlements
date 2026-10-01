@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Push Notifications capability.
+
+		`development` is correct for Debug builds; Xcode rewrites this to `production`
+		automatically for App Store / TestFlight archives, so this file can be committed
+		as-is. Without this entitlement the device never receives an APNs token, and
+		`messaging().getToken()` on iOS fails — FCM cannot mint an FCM token without it.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>
