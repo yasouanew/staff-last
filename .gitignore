@@ -85,3 +85,4 @@ ios/StaffSaaSMobile/GoogleService-Info.plist
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+.env
