@@ -1,4 +1,4 @@
-﻿node.exe : PASS __tests__/navigation/sessionExpiry.test.tsx (8.395 s)
+node.exe : PASS __tests__/navigation/sessionExpiry.test.tsx (8.395 s)
 At C:\nvm4w\nodejs\npx.ps1:29 char:3
 +   & $NODE_EXE $NPX_CLI_JS $args
 +   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,4 +1,4 @@
-﻿  console.log
+  console.log
     [motion][diag] react-native easing worklet markers {
       standard: false,
       decelerate: false,
