@@ -25,6 +25,15 @@ prepare_react_native_project!
 $RNFirebaseDisableSPM = true
 $RNFirebaseAsStaticFramework = true
 
+# Firebase's pods are written in Swift and, when built as static libraries, must
+# be importable as modules from other Swift pods (e.g. `FirebaseCoreInternal`
+# importing `GoogleUtilities`). Without this, `pod install` fails with:
+#   "The Swift pod `FirebaseCoreInternal` depends upon `GoogleUtilities`, which
+#    does not define modules."
+# `use_modular_headers!` makes every pod generate a module map so the imports
+# resolve. It must be declared before any target block.
+use_modular_headers!
+
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
