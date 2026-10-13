@@ -1,7 +1,9 @@
-import { useCallback, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppButton } from '../../../components/AppButton';
+import { AppIcon } from '../../../components/AppIcon';
+import { ChevronLeftGlyph, ChevronRightGlyph } from '../../../components/AppIcon/glyphs';
 import { AppText } from '../../../components/AppText';
 import { radius as radiusTokens } from '../../../theme/radius';
 import { borderWidths } from '../../../theme/sizing';
@@ -159,13 +161,7 @@ export function useDatePicker(): UseDatePickerResult {
 
     const nativeModule = loadNativePicker();
 
-    if (nativeModule === null) {
-        return { open, renderModal: null };
-    }
-
-    const Picker = nativeModule.default;
-
-    const renderModal = (): React.JSX.Element | null => {
+    const renderModal = useCallback((): React.JSX.Element | null => {
         if (pending === null) {
             return null;
         }
@@ -178,6 +174,25 @@ export function useDatePicker(): UseDatePickerResult {
         };
 
         const dismiss = (): void => setPending(null);
+
+        /*
+         * No native module: fall back to the app's own calendar sheet. This is a
+         * real picker — a month grid the user taps — not a text box, so the field
+         * always opens *something* that chooses a date. The previous behaviour
+         * (a "type the date manually" text input) is gone.
+         */
+        if (nativeModule === null) {
+            return (
+                <CalendarPickerSheet
+                    value={pending.value}
+                    minimumDate={pending.minimumDate}
+                    onSelect={commit}
+                    onDismiss={dismiss}
+                />
+            );
+        }
+
+        const Picker = nativeModule.default;
 
         /*
          * `fromApiDate` yields local midnight, which is what the native picker
@@ -203,12 +218,8 @@ export function useDatePicker(): UseDatePickerResult {
                         return;
                     }
 
-                    if (Platform.OS === 'ios') {
-                        commit(toApiDate(date));
-                        return;
-                    }
-
-                    // Android's dialog dismisses itself once a date is chosen.
+                    // Android's dialog dismisses itself once a date is chosen; iOS
+                    // commits on every spin and the sheet's Done closes it.
                     commit(toApiDate(date));
                 }}
             />
@@ -225,7 +236,7 @@ export function useDatePicker(): UseDatePickerResult {
                 {picker}
             </DatePickerSheet>
         );
-    };
+    }, [pending, nativeModule]);
 
     return { open, renderModal };
 }
@@ -298,4 +309,221 @@ const styles = StyleSheet.create({
         width: '100%',
         borderWidth: borderWidths.hairline,
     },
+    calendarHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    calendarNav: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    weekdayRow: {
+        flexDirection: 'row',
+    },
+    weekdayCell: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    weekRow: {
+        flexDirection: 'row',
+    },
+    dayCell: {
+        flex: 1,
+        aspectRatio: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 999,
+    },
 });
+
+/* ------------------------------------------------------------------ *
+ * Built-in calendar fallback
+ * ------------------------------------------------------------------ */
+
+/** Weekday column headers, Sunday-first to match the API's day indexing. */
+const WEEKDAY_HEADERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+type CalendarPickerSheetProps = {
+    /** Current API date, or `''` when unset. */
+    value: string;
+    /** Inclusive lower bound, as an API date. */
+    minimumDate?: string;
+    onSelect: (apiDate: string) => void;
+    onDismiss: () => void;
+};
+
+/**
+ * The app's own month-grid date picker.
+ *
+ * Used when no native picker module is installed, so the date fields always open a
+ * real chooser rather than degrading to a text box. It is deliberately minimal — a
+ * month header with prev/next, a weekday row and a 6×7 grid — because its only job
+ * is to let the user tap a day; anything richer belongs in the native picker.
+ *
+ * Dates are handled as local-midnight `Date` objects and serialised with
+ * `toApiDate`, so a tap can never drift a day through a timezone.
+ */
+function CalendarPickerSheet({
+    value,
+    minimumDate,
+    onSelect,
+    onDismiss,
+}: CalendarPickerSheetProps): React.JSX.Element {
+    const theme = useTheme();
+
+    const initial = fromApiDate(value) ?? new Date();
+    const [visibleMonth, setVisibleMonth] = useState(
+        () => new Date(initial.getFullYear(), initial.getMonth(), 1),
+    );
+
+    const minimum = fromApiDate(minimumDate);
+
+    const cells = useMemo(() => buildMonthCells(visibleMonth), [visibleMonth]);
+
+    const shiftMonth = (delta: number): void => {
+        setVisibleMonth(previous => new Date(previous.getFullYear(), previous.getMonth() + delta, 1));
+    };
+
+    const monthLabel = `${visibleMonth.toLocaleString('en', { month: 'long' })} ${visibleMonth.getFullYear()}`;
+
+    return (
+        <Modal transparent animationType="slide" visible onRequestClose={onDismiss}>
+            <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close date picker"
+                onPress={onDismiss}
+                style={[styles.scrim, { backgroundColor: theme.darkElevation.scrimShadow }]}>
+                <Pressable
+                    onPress={() => undefined}
+                    style={[
+                        styles.sheet,
+                        {
+                            backgroundColor: theme.colors.surface,
+                            borderRadius: radiusTokens.md,
+                            borderColor: theme.colors.border,
+                            padding: spacing.md,
+                            gap: spacing.sm,
+                        },
+                    ]}>
+                    <View style={styles.calendarHeader}>
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Previous month"
+                            onPress={() => shiftMonth(-1)}
+                            hitSlop={8}
+                            style={styles.calendarNav}>
+                            <AppIcon icon={ChevronLeftGlyph} size="small" color="textSecondary" />
+                        </Pressable>
+                        <AppText variant="subtitle">{monthLabel}</AppText>
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Next month"
+                            onPress={() => shiftMonth(1)}
+                            hitSlop={8}
+                            style={styles.calendarNav}>
+                            <AppIcon icon={ChevronRightGlyph} size="small" color="textSecondary" />
+                        </Pressable>
+                    </View>
+
+                    <View style={styles.weekdayRow}>
+                        {WEEKDAY_HEADERS.map((label, index) => (
+                            <View key={`${label}-${index}`} style={styles.weekdayCell}>
+                                <AppText variant="caption" color="textMuted">
+                                    {label}
+                                </AppText>
+                            </View>
+                        ))}
+                    </View>
+
+                    {cells.map((week, weekIndex) => (
+                        <View key={weekIndex} style={styles.weekRow}>
+                            {week.map(cell => {
+                                const disabled =
+                                    cell.date === null ||
+                                    (minimum !== null && cell.date < minimum);
+                                const selected =
+                                    cell.date !== null && value !== '' && toApiDate(cell.date) === value;
+
+                                return (
+                                    <Pressable
+                                        key={cell.key}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={
+                                            cell.date === null
+                                                ? undefined
+                                                : toApiDate(cell.date)
+                                        }
+                                        accessibilityState={{ selected, disabled }}
+                                        disabled={disabled}
+                                        onPress={() => {
+                                            if (cell.date !== null) {
+                                                onSelect(toApiDate(cell.date));
+                                            }
+                                        }}
+                                        style={[
+                                            styles.dayCell,
+                                            selected
+                                                ? { backgroundColor: theme.colors.primary }
+                                                : null,
+                                        ]}>
+                                        {cell.date !== null ? (
+                                            <AppText
+                                                variant="body"
+                                                color={selected ? 'onPrimary' : 'text'}
+                                                style={disabled ? { opacity: 0.35 } : undefined}>
+                                                {String(cell.date.getDate())}
+                                            </AppText>
+                                        ) : null}
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                    ))}
+
+                    <AppButton label="Cancel" variant="secondary" onPress={onDismiss} />
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+}
+
+type MonthCell = { key: string; date: Date | null };
+
+/**
+ * Builds a 6×7 grid of cells for a month, Sunday-first.
+ *
+ * Leading/trailing cells are `null` so the grid keeps a constant six rows — a
+ * month that would otherwise render five rows would make the sheet's height jump
+ * as the user pages through months.
+ */
+function buildMonthCells(month: Date): MonthCell[][] {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const firstWeekday = new Date(year, monthIndex, 1).getDay();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+    const cells: MonthCell[] = [];
+
+    for (let i = 0; i < firstWeekday; i += 1) {
+        cells.push({ key: `lead-${i}`, date: null });
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+        cells.push({ key: `day-${day}`, date: new Date(year, monthIndex, day) });
+    }
+
+    while (cells.length < 42) {
+        cells.push({ key: `trail-${cells.length}`, date: null });
+    }
+
+    const weeks: MonthCell[][] = [];
+
+    for (let i = 0; i < cells.length; i += 7) {
+        weeks.push(cells.slice(i, i + 7));
+    }
+
+    return weeks;
+}

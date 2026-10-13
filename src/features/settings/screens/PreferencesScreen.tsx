@@ -12,7 +12,7 @@ import { ScreenContainer } from '../../../components/ScreenContainer';
 import type { AccountStackParamList } from '../../../navigation/types';
 import { usePushStatus } from '../../../services/push';
 import { openSystemSettings } from '../../../services/push/pushStatus';
-import { spacing, useTheme } from '../../../theme';
+import { spacing, useColorSchemePreference, useTheme } from '../../../theme';
 import { usePreferencesStore, type AppearancePreference } from '../store';
 
 /** Human-readable label for each registration state. */
@@ -59,11 +59,14 @@ export function PreferencesScreen(_props: Props): React.JSX.Element {
     const isHydrated = usePreferencesStore(state => state.isHydrated);
     const pushEnabled = usePreferencesStore(state => state.pushEnabled);
     const rosterWeekView = usePreferencesStore(state => state.rosterWeekView);
-    const appearance = usePreferencesStore(state => state.appearance);
     const setPushEnabled = usePreferencesStore(state => state.setPushEnabled);
     const setRosterWeekView = usePreferencesStore(state => state.setRosterWeekView);
-    const setAppearance = usePreferencesStore(state => state.setAppearance);
     const reset = usePreferencesStore(state => state.reset);
+
+    // Appearance is owned by the ThemeProvider (persisted under
+    // `@app/color-scheme`), so the picker reads and writes through it rather
+    // than the preferences store — the two can no longer disagree.
+    const { preference: appearance, setColorScheme } = useColorSchemePreference();
 
     const pushStatus = usePushStatus();
     const [retrying, setRetrying] = useState(false);
@@ -206,7 +209,7 @@ export function PreferencesScreen(_props: Props): React.JSX.Element {
                                     accessibilityState={{ selected: isSelected }}
                                     testID={`appearance-${option.value}`}
                                     onPress={() => {
-                                        void setAppearance(option.value);
+                                        setColorScheme(option.value);
                                     }}
                                     style={[
                                         styles.segment,
@@ -274,6 +277,10 @@ export function PreferencesScreen(_props: Props): React.JSX.Element {
                             destructive
                             onPress={() => {
                                 void reset();
+                                // The appearance choice lives in the
+                                // ThemeProvider, not the preferences store, so
+                                // restoring defaults must reset it explicitly.
+                                setColorScheme('system');
                             }}
                         />
                     </AppCard>

@@ -13,7 +13,13 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
  */
 
 export type AuthStackParamList = {
-    Login: undefined;
+    /**
+     * `toast` is an optional one-shot confirmation surfaced on arrival — e.g. the
+     * Reset screen navigates here with "Password updated" after a successful
+     * reset. It is a param rather than shared state so the message travels with
+     * the navigation action and cannot leak into an unrelated visit to Login.
+     */
+    Login: { toast?: string } | undefined;
     /** No params: the reset token arrives by email deep link, handled at the root. */
     ForgotPassword: undefined;
     /**

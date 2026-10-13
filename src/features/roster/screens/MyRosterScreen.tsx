@@ -5,12 +5,7 @@ import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-
 
 import { AppCard } from '../../../components/AppCard';
 import { AppHeader } from '../../../components/AppHeader';
-import {
-    AppIcon,
-    CalendarDaysGlyph,
-    ChevronLeftGlyph,
-    ChevronRightGlyph,
-} from '../../../components/AppIcon';
+import { AppIcon, ChevronLeftGlyph, ChevronRightGlyph } from '../../../components/AppIcon';
 import { AppText } from '../../../components/AppText';
 import { EmptyState } from '../../../components/EmptyState';
 import { ErrorView } from '../../../components/ErrorView';
@@ -21,20 +16,27 @@ import { WeekDayStrip } from '../../../components/WeekDayStrip';
 import type { RosterStackParamList } from '../../../navigation/types';
 import { scaleRowHeight, useRowScale } from '../../../hooks';
 import { lineHeight, spacing } from '../../../theme';
-import { radiusRoles } from '../../../theme/radius';
 import { useTheme } from '../../../theme/useTheme';
 import {
     formatDate,
     formatDayMonth,
+    getDayOfMonth,
+    getMonthShort,
     getWeekdayShort,
     isSameApiDate,
     todayApiDate,
 } from '../../../utils/date';
 import { isCompanyAccessLocked } from '../../../utils/errors';
-import { ShiftCard, SHIFT_ROW_HEIGHT } from '../../home/components/ShiftCard';
+import { ShiftCard, SHIFT_ROW_HEIGHT } from '../../../components/ShiftCard';
 import { useMyRosterWeek } from '../hooks';
 
 type Props = NativeStackScreenProps<RosterStackParamList, 'MyRoster'>;
+
+/** The one global gutter, applied per element rather than by the container. */
+const GUTTER = 20;
+
+/** Gap between shift cards within a day group, per the 2026 spec. */
+const CARD_GAP = spacing.sm;
 
 export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
     const theme = useTheme();
@@ -43,14 +45,15 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
 
     /*
      * `SectionList`'s `getItemLayout` is fed from `layoutIndex` below, whose offsets
-     * must match the rendered row and sticky-header heights. Both grow with the OS
-     * text size, so they are scaled by the same factor the shared `ShiftCard` uses —
-     * otherwise a large accessibility text setting silently desyncs the scrollbar and
-     * `scrollToIndex`.
+     * must match the rendered row and group-header heights. The text-driven parts
+     * grow with the OS text size, so they are scaled by the same factor the shared
+     * `ShiftCard` uses — otherwise a large accessibility text setting silently
+     * desyncs the scrollbar and `scrollToIndex`. The fixed margins are not scaled.
      */
     const scale = useRowScale();
-    const scaledSectionHeader = scaleRowHeight(SECTION_HEADER_HEIGHT, scale);
-    const scaledRowBlock = scaleRowHeight(SHIFT_ROW_HEIGHT, scale) + spacing.sm;
+    const scaledHeaderBlock =
+        scaleRowHeight(GROUP_HEADER_TEXT_HEIGHT, scale) + GROUP_HEADER_MARGIN_TOP + GROUP_HEADER_MARGIN_BOTTOM;
+    const scaledRowBlock = scaleRowHeight(SHIFT_ROW_HEIGHT, scale) + CARD_GAP;
 
     const openShift = useCallback(
         (shiftId: number): void => {
@@ -66,37 +69,27 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
      * cells are compared by identity in `DayCell`'s `memo`, so rebuilding them on
      * every render (which an un-memoised `days` forced) re-rendered the whole
      * strip on unrelated state changes.
-     *
-     * There is deliberately no "has shifts" flag here. The strip's dot marks the
-     * selected day and today (see the strip's "Why the active dot is always
-     * mounted"); a per-day marker would need its own documented state, and one
-     * computed here was never read by the strip — so it was dropped rather than
-     * paid for.
      */
     const dayCells = useMemo<WeekDay[]>(
         () =>
             week.days.map(date => ({
                 date,
                 weekday: getWeekdayShort(date),
-                day: formatDayMonth(date).replace(/^\D+/, ''),
+                day: getDayOfMonth(date),
+                month: getMonthShort(date),
                 isToday: isSameApiDate(date, todayApiDate()),
             })),
         [week.days],
     );
 
     /**
-     * `SectionList` sections.
+     * `SectionList` sections, one per day that has shifts.
      *
-     * `SectionList` is chosen over a hand-rolled union `FlatList` here — the
-     * opposite of the Home screen's decision — because this feed needs
-     * `stickySectionHeadersEnabled`. A roster is scanned by day, and the day
-     * label must stay pinned while its shifts scroll past, which the native
-     * engine provides only if it owns the header. Hand-rolling it would mean
-     * measuring and animating a fake sticky header on the JS thread, which is
-     * precisely the work virtualization exists to avoid.
-     *
-     * `sections` is empty when there are no shifts, which the list renders as
-     * its `ListEmptyComponent` rather than as an empty day group.
+     * The grouping is produced by
+     * [`sectionizeShifts`](src/features/roster/utils/sectionizeShifts.ts:1) inside
+     * the hook, so the ordering rule has a single definition. `sections` is empty
+     * when there are no shifts, which the list renders as its `ListEmptyComponent`
+     * rather than as an empty day group.
      */
     const sections = useMemo(
         () =>
@@ -109,14 +102,13 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
     );
 
     /**
-     * Flattened prefix sums for `getItemLayout` (V5).
+     * Flattened prefix sums for `getItemLayout`.
      *
      * A `SectionList`'s `getItemLayout` receives an index into the *flattened*
      * list — sections and their headers interleaved with rows — so the offsets
      * cannot be computed from a single row height. Precomputing the prefix
-     * lengths once per week change is what keeps the lookup O(1) at scroll time
-     * instead of re-walking the sections on every call, which would run on
-     * every frame of a fling.
+     * lengths once per week change keeps the lookup O(1) at scroll time instead
+     * of re-walking the sections on every frame of a fling.
      */
     const layoutIndex = useMemo(() => {
         const map = new Map<number, { length: number; offset: number; index: number }>();
@@ -124,8 +116,8 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
         let flat = 0;
 
         sections.forEach(section => {
-            map.set(flat, { length: scaledSectionHeader, offset: cursor, index: flat });
-            cursor += scaledSectionHeader;
+            map.set(flat, { length: scaledHeaderBlock, offset: cursor, index: flat });
+            cursor += scaledHeaderBlock;
             flat += 1;
 
             section.data.forEach(() => {
@@ -136,7 +128,7 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
         });
 
         return map;
-    }, [sections, scaledSectionHeader, scaledRowBlock]);
+    }, [sections, scaledHeaderBlock, scaledRowBlock]);
 
     const refreshControl = (
         <RefreshControl
@@ -197,17 +189,20 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
     }
 
     /*
-     * `hasHeader={false}`: this branch renders **no** `AppHeader` — unlike the four
-     * branches above, which each pass `hasHeader` precisely because they do. The
-     * only chrome here is `WeekNav` / `WeekDayStrip` / `RosterChrome`, all of which
-     * sit inside the list's `ListHeaderComponent` and therefore scroll away with
-     * the content. With the flag set, the container skipped its own `insets.top`
-     * while nothing else absorbed it, so the top row began underneath the status
-     * bar. `scrollable` stays false because the `SectionList` is the scroller and
-     * must not be nested inside a `ScrollView`.
+     * `hasHeader={false}`: this branch renders **no** `AppHeader` — the week
+     * navigator is the screen's header and scrolls away with the content.
+     *
+     * `withGutter={false}`: the container's 16pt gutter is deliberately dropped so
+     * each element owns the 20pt spec gutter itself. The previous build kept the
+     * container gutter and cancelled it on the strip with a negative
+     * `marginHorizontal`, which is exactly what clipped the selected day pill at
+     * the left edge. With no negative margin anywhere, the clip cannot recur.
+     *
+     * `scrollable` stays false because the `SectionList` is the scroller and must
+     * not be nested inside a `ScrollView`.
      */
     return (
-        <ScreenContainer hasHeader={false} scrollable={false}>
+        <ScreenContainer hasHeader={false} scrollable={false} withGutter={false}>
             <SectionList
                 sections={sections}
                 keyExtractor={shift => String(shift.id)}
@@ -217,7 +212,7 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
                     </View>
                 )}
                 renderSectionHeader={({ section }) => (
-                    <DayDivider title={section.title} count={section.data.length} />
+                    <DayGroupHeader title={section.title} count={section.data.length} />
                 )}
                 getItemLayout={(_, index) =>
                     layoutIndex.get(index) ?? {
@@ -226,28 +221,26 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
                         index,
                     }
                 }
-                // Day headers must stay pinned while their shifts scroll (V7).
-                stickySectionHeadersEnabled
+                /*
+                 * Group headers are in-flow, not sticky: the spec gives them a
+                 * `marginTop` of 24, and a sticky header cannot carry a top margin
+                 * without exposing the row scrolling beneath it.
+                 */
+                stickySectionHeadersEnabled={false}
                 initialNumToRender={12}
                 maxToRenderPerBatch={10}
                 windowSize={9}
                 /*
                  * `removeClippedSubviews` is pinned off, matching `ScreenContainer`
-                 * and `LeaveListScreen`.
-                 *
-                 * Android defaults it on, and on a `SectionList` that also owns its
-                 * sticky headers it detaches and re-attaches the header/row views
-                 * natively. Swapping weeks replaces every section at once, so the
-                 * clipper can try to insert a view at an index the new flattened
-                 * list no longer has — the native `addViewAt: failed to insert
-                 * view ... at index N` crash seen when tapping the week arrows.
-                 * The windowing below already bounds what is mounted, so the
-                 * clipping bought nothing but that crash.
+                 * and `LeaveListScreen`. Android defaults it on, and it detaches
+                 * off-screen children — which breaks the card shadows and any
+                 * absolutely positioned overlay inside a row. The windowing below
+                 * already bounds what is mounted.
                  */
                 removeClippedSubviews={false}
                 refreshControl={refreshControl}
                 ListHeaderComponent={
-                    <View style={{ gap: theme.spacing.lg, paddingBottom: theme.spacing.md }}>
+                    <View>
                         <WeekNav
                             label={weekLabel}
                             onPrevious={week.goToPreviousWeek}
@@ -259,7 +252,7 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
                             selectedDate={week.selectedDate}
                             onSelect={week.selectDate}
                         />
-                        <RosterChrome
+                        <RosterSummary
                             publishedCount={week.publishedRosters.length}
                             totalShifts={week.totalShifts}
                             unavailable={week.rostersError !== null}
@@ -267,18 +260,20 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
                     </View>
                 }
                 ListEmptyComponent={
-                    // A week change keeps the header, nav and carousel live and
+                    // A week change keeps the header, nav and strip live and
                     // replaces only the feed region — the user's selected week
                     // must not vanish mid-interaction.
                     week.isRefreshing ? (
-                        <View style={{ paddingTop: theme.spacing.md }}>
+                        <View style={{ paddingTop: theme.spacing.md, paddingHorizontal: GUTTER }}>
                             <SkeletonRosterGroup />
                         </View>
                     ) : (
-                        <EmptyState
-                            title="No shifts this week"
-                            description="Nothing is scheduled for the selected week. Try another week, or check back once the roster is published."
-                        />
+                        <View style={{ paddingHorizontal: GUTTER }}>
+                            <EmptyState
+                                title="No shifts this week"
+                                description="Nothing is scheduled for the selected week. Try another week, or check back once the roster is published."
+                            />
+                        </View>
                     )
                 }
                 /*
@@ -286,8 +281,7 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
                  * owns the top safe-area inset. Applied as tail padding on the
                  * content container rather than as a `SafeAreaView`: the inset is
                  * then part of the scrollable area, so the nav row slides under the
-                 * transparent status bar and leaves the viewport cleanly, instead
-                 * of being permanently confined below an opaque band.
+                 * transparent status bar and leaves the viewport cleanly.
                  */
                 contentContainerStyle={{
                     paddingTop: insets.top,
@@ -300,10 +294,12 @@ export function MyRosterScreen({ navigation }: Props): React.JSX.Element {
 }
 
 /**
- * Week navigation row: prev / today / next, flanking the centred range label.
+ * Week navigator: prev / next chevrons flanking the centred range label.
  *
- * Each control is a 44pt square so it clears the touch-target floor without a
- * hit-slop hack, and each carries an explicit `accessibilityLabel` — an
+ * The range is the screen's title and the "Tap for this week" caption sits
+ * beneath it, so the whole centre block is one touch target that jumps to the
+ * current week. Each chevron is a 40×40 squircle on `surfaceMuted` with an 18pt
+ * `inkPrimary` glyph, and each carries an explicit `accessibilityLabel` — an
  * unlabelled chevron announces nothing.
  */
 function WeekNav({
@@ -320,18 +316,18 @@ function WeekNav({
     const theme = useTheme();
 
     return (
-        <View style={[styles.weekNav, { gap: theme.spacing.sm }]}>
+        <View style={[styles.weekNav, { marginHorizontal: GUTTER }]}>
             <NavButton label="Previous week" icon={ChevronLeftGlyph} onPress={onPrevious} />
 
             <Pressable
                 onPress={onToday}
                 accessibilityRole="button"
                 accessibilityLabel="Jump to this week"
-                style={[styles.weekLabel, { minHeight: 44 }]}>
-                <AppText variant="subtitle" numberOfLines={1}>
+                style={styles.weekLabel}>
+                <AppText variant="title" numberOfLines={1}>
                     {label}
                 </AppText>
-                <AppText variant="caption" color="textMuted">
+                <AppText variant="caption" style={{ color: theme.tokens.colors.inkTertiary }}>
                     Tap for this week
                 </AppText>
             </Pressable>
@@ -360,61 +356,30 @@ function NavButton({
             style={({ pressed }) => [
                 styles.navButton,
                 {
-                    backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
-                    borderColor: theme.colors.border,
+                    backgroundColor: theme.tokens.colors.surfaceMuted,
                     opacity: pressed ? 0.7 : 1,
                 },
             ]}>
-            <AppIcon icon={icon} size="medium" color="text" />
+            <AppIcon icon={icon} sizePoints={18} color="text" />
         </Pressable>
     );
 }
 
 /**
- * Pinned day divider.
+ * Day group header: the day label on the left, the shift count on the right.
  *
- * Opaque `background` is mandatory, not cosmetic: a sticky header sits over the
- * rows scrolling beneath it, so anything translucent would let the row text
- * bleed through the day label and destroy its legibility at exactly the moment
- * it is most needed.
+ * In-flow rather than sticky (see the list's `stickySectionHeadersEnabled`), so
+ * it carries the spec's `marginTop` 24 / `marginBottom` 8 and the 20pt gutter.
  */
-function DayDivider({ title, count }: { title: string; count: number }): React.JSX.Element {
-    const theme = useTheme();
-    // Matches the scaled offset the list uses for its sticky section headers, so the
-    // header that renders and the height `getItemLayout` reports cannot disagree.
-    const height = scaleRowHeight(SECTION_HEADER_HEIGHT, useRowScale());
+function DayGroupHeader({ title, count }: { title: string; count: number }): React.JSX.Element {
+    const { colors } = useTheme().tokens;
 
     return (
-        <View
-            style={[
-                styles.divider,
-                {
-                    height,
-                    backgroundColor: theme.colors.background,
-                    borderBottomColor: theme.isDark
-                        ? theme.darkElevation.ring
-                        : theme.colors.divider,
-                },
-            ]}>
-            {/*
-             * A small brand dot before the day label. It is the same visual
-             * device the Home feed uses for its section rule, which is what ties
-             * the two feeds together — a roster day and a dashboard section read
-             * as the same kind of heading.
-             */}
-            <View style={styles.dayLabel}>
-                <View
-                    style={[
-                        styles.dayDot,
-                        {
-                            backgroundColor: theme.colors.primary,
-                            borderRadius: radiusRoles.pill.full,
-                        },
-                    ]}
-                />
-                <AppText variant="bodyStrong">{title}</AppText>
-            </View>
-            <AppText variant="caption" color="textMuted">
+        <View style={styles.groupHeader}>
+            <AppText variant="heading" style={{ color: colors.inkPrimary }} numberOfLines={1}>
+                {title}
+            </AppText>
+            <AppText variant="caption" style={{ color: colors.inkTertiary }} numberOfLines={1}>
                 {count} shift{count === 1 ? '' : 's'}
             </AppText>
         </View>
@@ -422,7 +387,8 @@ function DayDivider({ title, count }: { title: string; count: number }): React.J
 }
 
 /**
- * Week chrome: which published roster covers the selected week, plus a total.
+ * Week summary banner: which published roster covers the selected week, plus a
+ * total shift count.
  *
  * Three states, not two. The published-roster line comes from a *separate*
  * request from the shifts it summarises, so "none published" and "could not
@@ -432,7 +398,7 @@ function DayDivider({ title, count }: { title: string; count: number }): React.J
  * together: the card never mixes a fact from the failed request with a fact from
  * the successful one, so it cannot imply the week is empty.
  */
-function RosterChrome({
+function RosterSummary({
     publishedCount,
     totalShifts,
     unavailable,
@@ -441,105 +407,80 @@ function RosterChrome({
     totalShifts: number;
     unavailable: boolean;
 }): React.JSX.Element {
-    const theme = useTheme();
+    const { colors, radius, shadows } = useTheme().tokens;
 
     return (
-        <AppCard padded={false}>
-            <View style={styles.chrome}>
-                {/*
-                 * A tinted plate rather than a bare glyph, matching the settings
-                 * rows. It also gives the summary card a visual anchor, so the
-                 * card does not read as a stray block of text between the
-                 * carousel and the feed.
-                 */}
-                <View
-                    style={[
-                        styles.chromePlate,
-                        {
-                            backgroundColor: theme.colors.primarySoft,
-                            borderRadius: radiusRoles.micro.md,
-                        },
-                    ]}>
-                    <AppIcon icon={CalendarDaysGlyph} size="small" color="primary" />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <AppText variant="bodyStrong">
-                        {unavailable
-                            ? 'Roster status unavailable'
-                            : publishedCount > 0
-                                ? `${publishedCount} published roster${publishedCount === 1 ? '' : 's'}`
-                                : 'No published roster yet'}
-                    </AppText>
-                    <AppText variant="caption" color="textMuted">
-                        {unavailable
-                            ? 'Could not check for a published roster.'
-                            : `${totalShifts} shift${totalShifts === 1 ? '' : 's'} in this week`}
-                    </AppText>
-                </View>
-            </View>
-        </AppCard>
+        <View
+            style={[
+                styles.summary,
+                {
+                    backgroundColor: colors.surface,
+                    borderRadius: radius.rLg,
+                    ...shadows.shadowCard,
+                },
+            ]}>
+            <AppText variant="bodyStrong" style={{ color: colors.inkPrimary }} numberOfLines={1}>
+                {unavailable
+                    ? 'Roster status unavailable'
+                    : publishedCount > 0
+                        ? `${publishedCount} published roster${publishedCount === 1 ? '' : 's'}`
+                        : 'No published roster yet'}
+            </AppText>
+            <AppText variant="caption" style={{ color: colors.inkSecondary }} numberOfLines={1}>
+                {unavailable
+                    ? 'Could not check for a published roster.'
+                    : `${totalShifts} shift${totalShifts === 1 ? '' : 's'} in this week`}
+            </AppText>
+        </View>
     );
 }
 
 /**
- * *Derived*, not hand-tuned: `getItemLayout` is only an optimisation while it agrees
- * with what actually rendered, and a literal that drifts from the stylesheet silently
- * corrupts scroll position. The value mirrors the sum used below, so changing a token
- * changes the layout math with it — and both this and the row height are passed
- * through [`scaleRowHeight`](src/hooks/useRowScale.ts:1) so the constant stays true
- * when the OS text size changes.
+ * *Derived*, not hand-tuned: `getItemLayout` is only an optimisation while it
+ * agrees with what actually rendered, and a literal that drifts from the
+ * stylesheet silently corrupts scroll position. The value mirrors the sum used
+ * above, so changing a token changes the layout math with it.
  */
-const SECTION_HEADER_HEIGHT = lineHeight.lg + spacing.md; // 24 + 16 = 40
+const GROUP_HEADER_TEXT_HEIGHT = lineHeight.heading; // 22
+const GROUP_HEADER_MARGIN_TOP = spacing.xl; // 24
+const GROUP_HEADER_MARGIN_BOTTOM = spacing.xs; // 8
 
 const styles = StyleSheet.create({
     weekNav: {
         alignItems: 'center',
         flexDirection: 'row',
+        gap: spacing.sm,
+        marginBottom: spacing.sm,
     },
     navButton: {
         alignItems: 'center',
-        // A soft small control, not a card: the micro radius keeps it from
-        // reading as a tappable panel.
-        borderRadius: radiusRoles.micro.md,
-        borderWidth: 1,
-        height: 44,
+        // A 40×40 squircle, per the spec.
+        borderRadius: 12,
+        height: 40,
         justifyContent: 'center',
-        width: 44,
+        width: 40,
     },
     weekLabel: {
         alignItems: 'center',
         flex: 1,
         justifyContent: 'center',
     },
-    divider: {
+    groupHeader: {
         alignItems: 'center',
-        borderBottomWidth: StyleSheet.hairlineWidth,
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingHorizontal: spacing.md,
-    },
-    dayLabel: {
-        alignItems: 'center',
-        flexDirection: 'row',
-        gap: spacing.xs,
-    },
-    dayDot: {
-        height: 6,
-        width: 6,
+        marginTop: GROUP_HEADER_MARGIN_TOP,
+        marginBottom: GROUP_HEADER_MARGIN_BOTTOM,
+        paddingHorizontal: GUTTER,
     },
     rowWrap: {
-        paddingBottom: spacing.sm,
+        paddingHorizontal: GUTTER,
+        paddingBottom: CARD_GAP,
     },
-    chrome: {
-        alignItems: 'center',
-        flexDirection: 'row',
-        gap: spacing.sm,
+    summary: {
+        marginHorizontal: GUTTER,
+        marginVertical: spacing.md,
         padding: spacing.md,
-    },
-    chromePlate: {
-        alignItems: 'center',
-        height: 36,
-        justifyContent: 'center',
-        width: 36,
+        gap: spacing.xxs,
     },
 });

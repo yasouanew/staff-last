@@ -4,35 +4,120 @@ import { useCallback, useMemo, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Keyboard, StyleSheet, View } from 'react-native';
 
-import { AppButton } from '../../../components/AppButton';
-import { AppCard } from '../../../components/AppCard';
-import { AppHeader } from '../../../components/AppHeader';
-import { AppIcon } from '../../../components/AppIcon';
-import { ShieldCheckGlyph } from '../../../components/AppIcon/glyphs';
 import { AppText } from '../../../components/AppText';
-import { AppTextInput, type AppTextInputRef } from '../../../components/AppTextInput';
 import { FormErrorPanel } from '../../../components/FormErrorPanel';
 import { KeyboardAwareView, useKeyboardAwareField } from '../../../components/KeyboardAwareView';
-import {
-    PasswordStrengthMeter,
-    STRENGTH_SLOT_HEIGHT,
-} from '../../../components/PasswordStrengthMeter';
+import { PrimaryButton, TextField, type TextFieldRef } from '../../../components/ui';
+import { useClearRootError } from '../../../hooks';
 import type { AuthStackParamList } from '../../../navigation/types';
 import { spacing } from '../../../theme/spacing';
 import { useTheme } from '../../../theme/useTheme';
 import type { AppError } from '../../../types/appError';
-import { useClearRootError } from '../../../hooks';
 import { toFieldErrorMap } from '../../../utils/errors';
+import {
+    evaluatePasswordStrength,
+    PASSWORD_MIN_LENGTH,
+    PASSWORD_STRENGTH_FILL,
+    PASSWORD_STRENGTH_SEGMENTS,
+    type PasswordStrengthLevel,
+} from '../../../utils/passwordStrength';
+import { AuthHeader } from '../components';
 import { useResetPassword } from '../hooks';
 import { useRecoveryStore } from '../store';
 import { parseResetParams } from '../utils';
-import { evaluatePasswordStrength } from '../utils/passwordStrength';
 import { resetPasswordSchema, type ResetPasswordFormValues } from '../validation';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
 
+/* ---- Spec geometry -------------------------------------------------- */
+
+/** Body horizontal gutter — the spec's 24. */
+const BODY_PADDING = 24;
+/** Gap between the four fields — the spec's 20. */
+const FIELD_GAP = 20;
+/** Instruction bottom margin — the spec's 28. */
+const INSTRUCTION_MARGIN = 28;
+/** CTA top margin — the spec's 32. */
+const CTA_MARGIN = 32;
+/** Segment height — the spec's 4. */
+const SEGMENT_HEIGHT = 4;
+/** Segment radius — the spec's 2. */
+const SEGMENT_RADIUS = 2;
+/** Gap between segments — the spec's 4. */
+const SEGMENT_GAP = 4;
+
+/** Filled-segment colour per level. */
+const STRENGTH_COLOR: Record<PasswordStrengthLevel, 'danger' | 'warning' | 'success'> = {
+    weak: 'danger',
+    medium: 'warning',
+    strong: 'success',
+};
+
 /**
- * Reset password (spec Screen 3 — Reset Password with Strength Meter).
+ * The three-segment strength hint.
+ *
+ * A row of equal-width segments rather than a single bar: the discrete segments
+ * make the three levels legible at a glance and give the state a shape, not just
+ * a length. Colour is never the only signal — the filled count differs too, so a
+ * colour-blind user reads the same state.
+ */
+function StrengthBar({ level }: { level: PasswordStrengthLevel }): React.JSX.Element {
+    const theme = useTheme();
+    const filled = PASSWORD_STRENGTH_FILL[level];
+
+    return (
+        <View
+            accessibilityRole="progressbar"
+            accessibilityLabel={`Password strength: ${level}`}
+            accessibilityValue={{ min: 1, max: PASSWORD_STRENGTH_SEGMENTS, now: filled }}
+            style={styles.strengthBar}>
+            {Array.from({ length: PASSWORD_STRENGTH_SEGMENTS }, (_, index) => (
+                <View
+                    key={index}
+                    style={[
+                        styles.strengthSegment,
+                        {
+                            backgroundColor:
+                                index < filled
+                                    ? theme.tokens.colors[STRENGTH_COLOR[level]]
+                                    : theme.tokens.colors.borderHairline,
+                        },
+                    ]}
+                />
+            ))}
+        </View>
+    );
+}
+
+/**
+ * Reset password (spec Screen 3 — Set a new password).
+ *
+ * ## Structure
+ *
+ * A fixed [`AuthHeader`](src/features/auth/components/AuthHeader.tsx:1) above a
+ * [`KeyboardAwareView`](src/components/KeyboardAwareView/KeyboardAwareView.tsx:1)
+ * scroller. The header owns the top inset and its own 16pt gutter; the scroller
+ * owns the 24pt body gutter, so the two never compound. The CTA is the last child
+ * of the scroller, so the keyboard-avoidance behaviour lifts it above the
+ * keyboard rather than letting it hide underneath.
+ *
+ * ## The clipped-label defect
+ *
+ * Every field is [`TextField`](src/components/ui/TextField/TextField.tsx:1), whose
+ * label is a **static** line above the control — never transformed, so it cannot
+ * clip. The 24pt gutter is enforced on the scroller's content container, so the
+ * label always starts at a positive x-offset. This is the same structural fix the
+ * Sign In and Forgot Password refactors applied.
+ *
+ * ## Live validation
+ *
+ * The password and confirmation fields carry `validators` — local checks that run
+ * against the current value on every render and drive the frame colour and the
+ * message band, exactly like a server error. A server 422 still outranks them, so
+ * a passing local check can never mask a rejection. The strength bar is computed
+ * by [`evaluatePasswordStrength`](src/utils/passwordStrength.ts:1) and rendered in
+ * a fixed-height slot, so typing the first character cannot shift the Confirm
+ * field.
  *
  * ## Token and email arrive three ways
  *
@@ -44,41 +129,29 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
  *
  * 1. Deep link params — `staffapp://reset-password?token=…&email=…` — the normal path.
  * 2. The recovery store — set by Forgot Password when the user stayed in the app.
- * 3. Nothing at all — the token field is revealed and the user pastes the code.
+ * 3. Nothing at all — the token field is simply empty and the user pastes the code.
  *
- * There is no endpoint to validate the token ahead of time, so the screen submits
- * blind and maps any 422 back onto `token` / `email`.
+ * ## Success
  *
- * ## The strength meter sits inside the password field's group
- *
- * The meter is rendered in a `PasswordFieldGroup` immediately below the primary
- * password input, in a slot of **fixed** height (`STRENGTH_SLOT_HEIGHT`). That
- * fixed slot is what lets the pill appear the moment the first character is typed
- * **without moving the Confirm field** — the space is already reserved, exactly as
- * [`AppTextInput`](src/components/AppTextInput/AppTextInput.tsx:1) reserves its
- * message band. A conditionally-inserted meter would push the rest of the form down
- * mid-keystroke, which is the single most jarring thing a form can do.
- *
- * ## Focus chain
- *
- * `token` → `email` → `password` → `confirmation` → submit. The last field is the
- * only one with `returnKeyType="done"`, so the keyboard's action key is never
- * ambiguous about whether it will advance or submit.
+ * On success the screen navigates to Sign In with a one-shot `toast` param, which
+ * the Login screen surfaces as a transient confirmation pill. The flow does not
+ * render its own success state: the destination is the sign-in form, and the toast
+ * is the acknowledgement.
  */
 export function ResetPasswordScreen({ navigation, route }: Props): React.JSX.Element {
     const theme = useTheme();
 
     const pendingEmail = useRecoveryStore(state => state.pendingEmail);
 
-    const emailRef = useRef<AppTextInputRef | null>(null);
-    const passwordRef = useRef<AppTextInputRef | null>(null);
-    const confirmRef = useRef<AppTextInputRef | null>(null);
+    const emailRef = useRef<TextFieldRef | null>(null);
+    const passwordRef = useRef<TextFieldRef | null>(null);
+    const confirmRef = useRef<TextFieldRef | null>(null);
 
     /**
-     * `route.params` is optional at the type level (deep links can omit it entirely),
-     * so everything is funnelled through the same tolerant parser the link handler
-     * uses. Memoised because `useForm`'s `defaultValues` are read once on mount, and
-     * a fresh object identity on every render serves no purpose.
+     * `route.params` is optional at the type level (deep links can omit it
+     * entirely), so everything is funnelled through the same tolerant parser the
+     * link handler uses. Memoised because `useForm`'s `defaultValues` are read
+     * once on mount, and a fresh object identity on every render serves no purpose.
      */
     const initial = useMemo(() => {
         const parsed = parseResetParams(route.params);
@@ -107,26 +180,21 @@ export function ResetPasswordScreen({ navigation, route }: Props): React.JSX.Ele
         mode: 'onBlur',
     });
 
-    const passwordValue = watch('password');
-    const strength = useMemo(() => evaluatePasswordStrength(passwordValue ?? ''), [passwordValue]);
+    const passwordValue = watch('password') ?? '';
+    const strength = useMemo(() => evaluatePasswordStrength(passwordValue), [passwordValue]);
 
     // A root panel is not attached to a field, so it must be cleared by hand.
     const clearRootError = useClearRootError(clearErrors, errors.root !== undefined);
 
     const resetPassword = useResetPassword();
 
-    /**
-     * When no token came in with the link there is nothing to submit, so the field is
-     * revealed instead of failing validation on an invisible input. The user is told
-     * where to find the code rather than being left staring at an empty form.
-     */
-    const hasToken = initial.token.length > 0;
-
     const onSubmit = handleSubmit(async values => {
         Keyboard.dismiss();
 
         try {
             await resetPassword.mutateAsync(values);
+            // The flow ends on the sign-in form; the toast is the acknowledgement.
+            navigation.navigate('Login', { toast: 'Password updated' });
         } catch (error) {
             const appError = error as AppError;
 
@@ -181,74 +249,30 @@ export function ResetPasswordScreen({ navigation, route }: Props): React.JSX.Ele
     const password = useKeyboardAwareField('password');
     const confirmation = useKeyboardAwareField('password_confirmation');
 
-    /**
-     * The evaluator's first suggestion replaces the field's static helper once the
-     * user has typed something. The pill is a single-line badge by contract, so the
-     * actionable copy has to live in the helper slot rather than inside the pill —
-     * that keeps the badge geometry intact and avoids a second wrapping line under
-     * the field.
-     */
-    const passwordHelper =
-        strength.suggestions.length > 0 ? strength.suggestions[0] : 'At least 8 characters.';
-
-    if (resetPassword.isSuccess) {
-        return (
-            <KeyboardAwareView ownsTopInset>
-                {/* No back arrow here: the flow is complete, and an arrow back into
-                    a consumed one-time token would dead-end on a 422. */}
-                <AppHeader title="Password updated" />
-
-                <View style={[styles.stack, { gap: theme.spacing.xl }]}>
-                    <AppCard elevated="low" padded>
-                        <View style={[styles.confirmation, { gap: theme.spacing.sm }]}>
-                            <AppIcon
-                                icon={ShieldCheckGlyph}
-                                size="large"
-                                color="success"
-                                accessibilityLabel="Password updated"
-                            />
-
-                            <AppText variant="subtitle">
-                                Your password has been changed. Sign in with your new password to
-                                continue.
-                            </AppText>
-                        </View>
-                    </AppCard>
-
-                    <AppButton
-                        label="Back to sign in"
-                        onPress={() => navigation.navigate('Login')}
-                        fullWidth
-                        size="lg"
-                    />
-                </View>
-            </KeyboardAwareView>
-        );
-    }
-
     const rootError = errors.root?.message;
 
     return (
-        <KeyboardAwareView ownsTopInset>
-            <AppHeader title="Set a new password" onBack={goBack} flat separator={false} />
+        <View style={[styles.screen, { backgroundColor: theme.colors.surface }]}>
+            <AuthHeader title="Set a new password" onBack={goBack} />
 
-            <View style={[styles.stack, { gap: theme.spacing.xl }]}>
-                <View style={styles.infoBlock}>
-                    <AppText variant="body" color="textSecondary">
-                        {hasToken
-                            ? 'Choose a new password for your account.'
-                            : 'Paste the reset code from your email, then choose a new password.'}
+            <KeyboardAwareView
+                ownsTopInset={false}
+                backgroundColor={theme.colors.surface}
+                contentContainerStyle={styles.content}>
+                <View style={styles.body}>
+                    <AppText
+                        variant="heading"
+                        style={[styles.instruction, { color: theme.tokens.colors.inkPrimary }]}>
+                        Paste the reset code from your email, then choose a new password.
                     </AppText>
-                </View>
 
-                <View style={[styles.form, { gap: theme.spacing.md }]}>
-                    {hasToken ? null : (
+                    <View style={styles.form}>
                         <View {...token.wrapperProps}>
                             <Controller
                                 control={control}
                                 name="token"
                                 render={({ field }) => (
-                                    <AppTextInput
+                                    <TextField
                                         label="Reset code"
                                         value={field.value}
                                         onChangeText={text => {
@@ -268,145 +292,174 @@ export function ResetPasswordScreen({ navigation, route }: Props): React.JSX.Ele
                                 )}
                             />
                         </View>
-                    )}
 
-                    <View {...email.wrapperProps}>
-                        <Controller
-                            control={control}
-                            name="email"
-                            render={({ field }) => (
-                                <AppTextInput
-                                    ref={emailRef}
-                                    label="Email"
-                                    value={field.value}
-                                    onChangeText={text => {
-                                        field.onChange(text);
-                                        clearRootError();
-                                    }}
-                                    onBlur={field.onBlur}
-                                    onFocus={email.onFocus}
-                                    error={errors.email?.message}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    autoComplete="email"
-                                    autoCorrect={false}
-                                    textContentType="emailAddress"
-                                    returnKeyType="next"
-                                    onSubmitEditing={focusPassword}
-                                    required
-                                />
-                            )}
-                        />
-                    </View>
-
-                    {/* The meter belongs to the password field, so both live in one
-                        group with a tight inner gap. */}
-                    <View style={[styles.fieldGroup, { gap: theme.spacing.sm }]}>
-                        <View {...password.wrapperProps}>
+                        <View {...email.wrapperProps}>
                             <Controller
                                 control={control}
-                                name="password"
+                                name="email"
                                 render={({ field }) => (
-                                    <AppTextInput
-                                        ref={passwordRef}
-                                        label="New password"
+                                    <TextField
+                                        ref={emailRef}
+                                        label="Email"
                                         value={field.value}
                                         onChangeText={text => {
                                             field.onChange(text);
                                             clearRootError();
                                         }}
                                         onBlur={field.onBlur}
-                                        onFocus={password.onFocus}
-                                        error={errors.password?.message}
-                                        helper={passwordHelper}
-                                        secureToggle
+                                        onFocus={email.onFocus}
+                                        error={errors.email?.message}
+                                        keyboardType="email-address"
                                         autoCapitalize="none"
-                                        autoComplete="new-password"
-                                        textContentType="newPassword"
+                                        autoComplete="email"
+                                        autoCorrect={false}
+                                        textContentType="emailAddress"
                                         returnKeyType="next"
-                                        onSubmitEditing={focusConfirm}
+                                        onSubmitEditing={focusPassword}
                                         required
                                     />
                                 )}
                             />
                         </View>
 
-                        {/* Fixed-height slot: the pill appears inside space that
-                            already existed, so typing cannot shift the Confirm field. */}
-                        <View style={styles.strengthSlot}>
-                            <PasswordStrengthMeter
-                                score={strength.score}
-                                label={strength.label}
-                                showLabel
+                        {/* The strength bar belongs to the password field, so both
+                            live in one group with a tight inner gap. */}
+                        <View style={styles.fieldGroup}>
+                            <View {...password.wrapperProps}>
+                                <Controller
+                                    control={control}
+                                    name="password"
+                                    render={({ field }) => (
+                                        <TextField
+                                            ref={passwordRef}
+                                            label="New password"
+                                            value={field.value}
+                                            onChangeText={text => {
+                                                field.onChange(text);
+                                                clearRootError();
+                                            }}
+                                            onBlur={field.onBlur}
+                                            onFocus={password.onFocus}
+                                            error={errors.password?.message}
+                                            helper="At least 8 characters."
+                                            validators={[
+                                                value =>
+                                                    value.length > 0 &&
+                                                        value.length < PASSWORD_MIN_LENGTH
+                                                        ? `Use at least ${PASSWORD_MIN_LENGTH} characters.`
+                                                        : undefined,
+                                            ]}
+                                            secureToggle
+                                            autoCapitalize="none"
+                                            autoComplete="new-password"
+                                            textContentType="newPassword"
+                                            returnKeyType="next"
+                                            onSubmitEditing={focusConfirm}
+                                            required
+                                        />
+                                    )}
+                                />
+                            </View>
+
+                            {/* Fixed-height slot: the bar appears inside space that
+                                already existed, so typing cannot shift the Confirm
+                                field. */}
+                            <View style={styles.strengthSlot}>
+                                {passwordValue.length > 0 ? (
+                                    <StrengthBar level={strength} />
+                                ) : null}
+                            </View>
+                        </View>
+
+                        <View {...confirmation.wrapperProps}>
+                            <Controller
+                                control={control}
+                                name="password_confirmation"
+                                render={({ field }) => (
+                                    <TextField
+                                        ref={confirmRef}
+                                        label="Confirm new password"
+                                        value={field.value}
+                                        onChangeText={text => {
+                                            field.onChange(text);
+                                            clearRootError();
+                                        }}
+                                        onBlur={field.onBlur}
+                                        onFocus={confirmation.onFocus}
+                                        error={errors.password_confirmation?.message}
+                                        validators={[
+                                            value =>
+                                                value.length > 0 && value !== passwordValue
+                                                    ? 'Passwords do not match.'
+                                                    : undefined,
+                                        ]}
+                                        secureToggle
+                                        autoCapitalize="none"
+                                        autoComplete="new-password"
+                                        textContentType="newPassword"
+                                        returnKeyType="done"
+                                        onSubmitEditing={submitFromKeyboard}
+                                        required
+                                    />
+                                )}
                             />
                         </View>
-                    </View>
 
-                    <View {...confirmation.wrapperProps}>
-                        <Controller
-                            control={control}
-                            name="password_confirmation"
-                            render={({ field }) => (
-                                <AppTextInput
-                                    ref={confirmRef}
-                                    label="Confirm new password"
-                                    value={field.value}
-                                    onChangeText={text => {
-                                        field.onChange(text);
-                                        clearRootError();
-                                    }}
-                                    onBlur={field.onBlur}
-                                    onFocus={confirmation.onFocus}
-                                    error={errors.password_confirmation?.message}
-                                    secureToggle
-                                    autoCapitalize="none"
-                                    autoComplete="new-password"
-                                    textContentType="newPassword"
-                                    returnKeyType="done"
-                                    onSubmitEditing={submitFromKeyboard}
-                                    required
-                                />
-                            )}
+                        {rootError !== undefined ? <FormErrorPanel message={rootError} /> : null}
+
+                        <PrimaryButton
+                            label="Update password"
+                            onPress={onSubmit}
+                            loading={resetPassword.isPending}
+                            style={styles.cta}
                         />
                     </View>
-
-                    {rootError !== undefined ? <FormErrorPanel message={rootError} /> : null}
-
-                    <AppButton
-                        label="Update password"
-                        onPress={onSubmit}
-                        loading={resetPassword.isPending}
-                        fullWidth
-                        size="lg"
-                    />
                 </View>
-            </View>
-        </KeyboardAwareView>
+            </KeyboardAwareView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    stack: {
-        flexGrow: 1,
+    screen: {
+        flex: 1,
+    },
+    content: {
+        // The spec's 24pt body gutter, enforced on the scroller so the field
+        // labels always start at a positive x-offset — the structural half of
+        // the clipped-label fix.
+        paddingHorizontal: BODY_PADDING,
+    },
+    body: {
         marginTop: spacing.xl,
     },
-    infoBlock: {
-        paddingHorizontal: spacing.xxs,
+    instruction: {
+        marginBottom: INSTRUCTION_MARGIN,
     },
     form: {
         width: '100%',
+        gap: FIELD_GAP,
     },
     fieldGroup: {
         width: '100%',
+        gap: spacing.xs,
     },
     strengthSlot: {
-        // Reserved unconditionally. `STRENGTH_SLOT_HEIGHT` is the pill's own
-        // measured height, exported by the meter so the two cannot drift.
-        height: STRENGTH_SLOT_HEIGHT,
+        // Reserved unconditionally so the bar's appearance cannot move the
+        // Confirm field.
+        height: SEGMENT_HEIGHT,
         justifyContent: 'center',
-        paddingHorizontal: spacing.xxs,
     },
-    confirmation: {
-        alignItems: 'center',
+    strengthBar: {
+        flexDirection: 'row',
+        gap: SEGMENT_GAP,
+    },
+    strengthSegment: {
+        flex: 1,
+        height: SEGMENT_HEIGHT,
+        borderRadius: SEGMENT_RADIUS,
+    },
+    cta: {
+        marginTop: CTA_MARGIN,
     },
 });

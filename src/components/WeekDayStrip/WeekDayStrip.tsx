@@ -1,33 +1,27 @@
-import { memo, useCallback, useMemo } from 'react';
-import {
-    FlatList,
-    Pressable,
-    StyleSheet,
-    useWindowDimensions,
-    View,
-    type ListRenderItemInfo,
-} from 'react-native';
+import { memo } from 'react';
+import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { scaleRowHeight, useRowScale } from '../../hooks';
-import { layout } from '../../theme/sizing';
+import { shadows } from '../../theme/shadows';
 import { spacing } from '../../theme/spacing';
-import { radiusRoles } from '../../theme/radius';
 import { useTheme } from '../../theme/useTheme';
 import { AppText } from '../AppText/AppText';
 
 /**
  * One day cell's worth of data.
  *
- * `date` is the API date string (`YYYY-MM-DD`) and doubles as the list key —
- * see the note on `keyExtractor` below.
+ * `date` is the API date string (`YYYY-MM-DD`) and doubles as the list key — see
+ * the note on `keyExtractor` below.
  */
 export type WeekDay = {
-    /** API date, `YYYY-MM-DD`. Stable identity for the list. */
+    /** API date, `YYYY-MM-DD`. Stable identity for the cell. */
     date: string;
-    /** Single-letter or short weekday label, e.g. "Mo". */
+    /** Short weekday label, e.g. `"Mon"`. */
     weekday: string;
-    /** Day-of-month number, rendered as a string to keep the cell dumb. */
+    /** Day-of-month number, e.g. `"21"`. */
     day: string;
+    /** Short month label, e.g. `"Sep"`. */
+    month: string;
     /** Marker for "this is today" — styles the cell even when unselected. */
     isToday: boolean;
 };
@@ -39,54 +33,44 @@ export type WeekDayStripProps = {
     testID?: string;
 };
 
-/** The strip is always exactly one week — a fixed, known length. */
-const DAYS_PER_WEEK = 7;
+/** Cell height, per the 2026 spec. Scaled by the OS text size (see below). */
+const CELL_HEIGHT = 64;
+
+/** Cell corner radius, per the 2026 spec. */
+const CELL_RADIUS = 14;
 
 /**
- * Horizontal day selector carousel.
+ * Horizontal day selector.
  *
- * ## Why this is a `FlatList` and not a `View` with `.map`
+ * ## Why this is a plain `View` row and not a `FlatList`
  *
- * Seven items fit on screen, so a virtualised list buys nothing here *today*.
- * It is still a `FlatList` for three reasons that all survive that observation:
+ * The previous build was a horizontal `FlatList` with a negative
+ * `marginHorizontal` and a `getItemLayout` that derived cell widths from the
+ * window. That combination is what clipped the selected Monday pill at the left
+ * edge: the list's content container was pulled outside the screen gutter, and
+ * the first cell's shadow/fill was then cut by the list's own bounds.
  *
- * 1. **It is the mandated architecture** (V1). If this screen later grows a
- *    two-week or month strip, the scroll engine is already correct and the only
- *    change is the data feeding it.
- * 2. **`getItemLayout` makes the horizontal scroll jump-free.** A day strip is
- *    the one place in the app where tapping "next day" should scroll
- *    programmatically; without measured offsets that scroll is a guess.
- * 3. **Windowing keeps `initialNumToRender` explicit**, which is the difference
- *    between a defined first frame and an accidental one.
+ * Seven cells always fit on screen, so virtualisation bought nothing here. The
+ * strip is now a **flex row of seven equal cells** inside a plain `View` with
+ * `paddingHorizontal: 20` and `overflow: 'visible'`. There is no negative
+ * margin, no absolute offset and no scroll engine, so a selected cell renders
+ * fully within bounds by construction — the clip cannot recur.
  *
- * ## Why every cell is rendered immediately
+ * ## Why the cells are `flex: 1` rather than a computed width
  *
- * `initialNumToRender = DAYS_PER_WEEK` is deliberate, not a default left
- * unset. Seven cells are always visible, so deferring any of them would
- * produce a visibly empty strip for one frame. `windowSize = 1` is safe
- * *because* everything fits: there is no off-screen tail to pre-render.
+ * A derived pixel width has to be recomputed on every rotation and every
+ * `useWindowDimensions` change, and any rounding error shows up as a cell that
+ * is a hair too wide and pushes its neighbour off the edge. `flex: 1` lets the
+ * layout engine divide the available width exactly, with the `gap` subtracted
+ * first — no arithmetic, no drift.
  *
- * ## Why the active dot is always mounted
+ * ## Why the height is scaled
  *
- * The dot marks the selected day. Rendering it conditionally would change the
- * cell's inner height when selection moves, so the row would jump by the dot's
- * height on every tap. It is instead always present at `opacity: 0` and only
- * its opacity changes — the same reserved-space technique the auth screens use
- * for the password strength meter, and the reason `CELL_HEIGHT` is a constant
- * that `getItemLayout` can rely on.
- *
- * ## Layout maths
- *
- * Cell width is derived, never guessed. The strip shows seven gutters between
- * eight cell edges across the content width, so:
- *
- * ```
- * cell = (contentWidth - (DAYS_PER_WEEK - 1) * GAP) / DAYS_PER_WEEK
- * ```
- *
- * `contentWidth` is `min(screenWidth, maxContentWidth)` so the strip is
- * identical on a phone and on a tablet, where the rest of the app is capped by
- * `layout.maxContentWidth`.
+ * The cell holds three stacked lines (weekday, day number, month), so its height
+ * must grow with the OS text size or the lines clip. `CELL_HEIGHT` is the design
+ * baseline; the rendered height is scaled by the same factor the rest of the app
+ * uses, so a large accessibility setting is honoured without the strip
+ * overflowing its own geometry.
  */
 export function WeekDayStrip({
     days,
@@ -94,85 +78,31 @@ export function WeekDayStrip({
     onSelect,
     testID,
 }: WeekDayStripProps): React.JSX.Element {
-    const theme = useTheme();
-    const { width: windowWidth } = useWindowDimensions();
-
-    const contentWidth = Math.min(windowWidth, layout.maxContentWidth) - theme.screenGutter * 2;
-    const cellWidth =
-        (contentWidth - (DAYS_PER_WEEK - 1) * spacing.xs) / DAYS_PER_WEEK;
-
-    // `getItemLayout` is contractually required for a fixed-size horizontal
-    // list: it lets the list answer "where is item n?" without measuring, which
-    // is what makes `scrollToIndex` reliable and the first render instant.
-    /*
-     * The cell holds three stacked lines (weekday, day number, dot), so its height
-     * must grow with the OS text size. `CELL_HEIGHT` is the design baseline; the
-     * actual height is scaled, and `getItemLayout` is told the scaled value so the
-     * horizontal `scrollToIndex` used for "next day" stays accurate.
-     */
     const scale = useRowScale();
     const cellHeight = scaleRowHeight(CELL_HEIGHT, scale);
 
-    const getItemLayout = useCallback(
-        (_data: ArrayLike<WeekDay> | null | undefined, index: number) => ({
-            length: cellWidth + spacing.xs,
-            offset: (cellWidth + spacing.xs) * index,
-            index,
-        }),
-        [cellWidth],
-    );
-
-    // Identity-stable renderer (V4). `onSelect` must itself be stable — the
-    // screen wraps it in `useCallback`, because a fresh closure here would
-    // discard `DayCell`'s memoisation on every parent render.
-    const renderItem = useCallback(
-        ({ item }: ListRenderItemInfo<WeekDay>) => (
-            <DayCell
-                day={item}
-                width={cellWidth}
-                height={cellHeight}
-                selected={item.date === selectedDate}
-                onPress={onSelect}
-            />
-        ),
-        [cellWidth, cellHeight, selectedDate, onSelect],
-    );
-
-    // The key is the API date, never the index (V3): switching weeks reorders
-    // and replaces every item, and an index key would make React reuse a
-    // selected "Tuesday" cell as an unselected "Wednesday" one — carrying the
-    // old selection styling into the new week for a frame.
-    const keyExtractor = useCallback((day: WeekDay) => day.date, []);
-
-    const separator = useMemo(
-        () => <View style={{ width: spacing.xs }} />,
-        [],
-    );
-
     return (
-        <FlatList
+        <View
             testID={testID}
-            data={days}
-            horizontal
-            keyExtractor={keyExtractor}
-            renderItem={renderItem}
-            getItemLayout={getItemLayout}
-            ItemSeparatorComponent={() => separator}
-            showsHorizontalScrollIndicator={false}
-            // Everything fits on screen, so: render it all, keep the window tight.
-            initialNumToRender={DAYS_PER_WEEK}
-            maxToRenderPerBatch={DAYS_PER_WEEK}
-            windowSize={1}
-            removeClippedSubviews={false}
-            contentContainerStyle={styles.content}
-            style={{ marginHorizontal: -theme.screenGutter }}
-        />
+            style={[styles.strip, { height: cellHeight }]}
+            // The selected cell's shadow must be allowed to paint outside the
+            // row's bounds; clipping it is the defect this rebuild removes.
+            pointerEvents="box-none">
+            {days.map(day => (
+                <DayCell
+                    key={day.date}
+                    day={day}
+                    height={cellHeight}
+                    selected={day.date === selectedDate}
+                    onPress={onSelect}
+                />
+            ))}
+        </View>
     );
 }
 
 type DayCellProps = {
     day: WeekDay;
-    width: number;
     /** Scaled cell height, so the three stacked lines never clip. */
     height: number;
     selected: boolean;
@@ -188,63 +118,53 @@ type DayCellProps = {
  * every parent render and defeat the comparison entirely.
  *
  * Idle vs selected follow the brief exactly: idle is a neutral surface with
- * dark text and **no shadow**; selected is the primary fill with white bold
- * text and the active dot.
+ * tertiary/secondary ink and **no shadow**; selected is the primary fill with
+ * white text and a primary-tinted float shadow.
  */
-function DayCellComponent({ day, width, height, selected, onPress }: DayCellProps): React.JSX.Element {
+function DayCellComponent({ day, height, selected, onPress }: DayCellProps): React.JSX.Element {
     const theme = useTheme();
+    const { colors } = theme;
 
-    const textColor = selected ? theme.colors.onPrimary : theme.colors.text;
-    const weekdayColor = selected ? theme.colors.onPrimary : theme.colors.textMuted;
+    const weekdayColor = selected ? colors.onPrimary : colors.textMuted;
+    const dayColor = selected ? colors.onPrimary : colors.text;
+    const monthColor = selected ? colors.onPrimary : colors.textMuted;
 
     return (
         <Pressable
             onPress={() => onPress(day.date)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            accessibilityLabel={`${day.weekday} ${day.day}`}
+            accessibilityLabel={`${day.weekday} ${day.day} ${day.month}`}
             style={({ pressed }) => [
                 styles.cell,
                 {
-                    backgroundColor: selected
-                        ? theme.colors.primary
-                        : theme.colors.surfaceMuted,
-                    opacity: pressed ? 0.7 : 1,
-                    width,
+                    backgroundColor: selected ? colors.primary : colors.surfaceMuted,
                     height,
+                    opacity: pressed ? 0.7 : 1,
+                    // The selected cell floats; the idle cell is flat. The shadow
+                    // is tinted with the brand colour rather than the neutral ink
+                    // so the lift reads as "selected", not merely "raised".
+                    ...(selected
+                        ? { ...shadows.float, shadowColor: colors.primary }
+                        : shadows.none),
                 },
             ]}>
-            <AppText variant="caption" style={{ color: weekdayColor }}>
+            <AppText variant="micro" scaling="fixed" style={{ color: weekdayColor }} numberOfLines={1}>
                 {day.weekday}
             </AppText>
 
             <AppText
-                variant={selected ? 'subtitle' : 'body'}
+                scaling="fixed"
                 // Bold weight for the selected day is part of the state, not
-                // decoration — it must survive in greyscale (V10).
-                style={{
-                    color: textColor,
-                    fontWeight: selected ? '700' : '500',
-                }}>
+                // decoration — it must survive in greyscale.
+                style={[styles.dayNumber, { color: dayColor }]}
+                numberOfLines={1}>
                 {day.day}
             </AppText>
 
-            {/*
-             * Always mounted, only ever faded (see component docblock). The
-             * unselected colour is `textMuted`, the "today" colour is the
-             * primary tint so an unselected today still reads as today.
-             */}
-            <View
-                style={[
-                    styles.dot,
-                    {
-                        backgroundColor: selected
-                            ? theme.colors.onPrimary
-                            : theme.colors.primary,
-                        opacity: selected || day.isToday ? 1 : 0,
-                    },
-                ]}
-            />
+            <AppText variant="micro" scaling="fixed" style={{ color: monthColor }} numberOfLines={1}>
+                {day.month}
+            </AppText>
         </Pressable>
     );
 }
@@ -256,27 +176,32 @@ function DayCellComponent({ day, width, height, selected, onPress }: DayCellProp
  */
 const DayCell = memo(DayCellComponent);
 
-const CELL_HEIGHT = 72;
+const strip: ViewStyle = {
+    flexDirection: 'row',
+    // The one global gutter, applied here rather than by a parent so the strip
+    // is self-contained and cannot be pulled outside it by a negative margin.
+    paddingHorizontal: 20,
+    gap: 6,
+    // Explicit: the selected cell's shadow paints outside the row.
+    overflow: 'visible',
+};
 
 const styles = StyleSheet.create({
-    content: {
-        alignItems: 'center',
-    },
+    strip,
     cell: {
         alignItems: 'center',
-        borderRadius: radiusRoles.macro.md,
+        borderRadius: CELL_RADIUS,
+        flex: 1,
         gap: spacing.xxs,
-        // `height` is applied inline, scaled by the OS text size (see the component
-        // body), so the three stacked lines cannot clip at large accessibility sizes.
+        // `height` is applied inline, scaled by the OS text size (see the
+        // component body), so the three stacked lines cannot clip.
         justifyContent: 'center',
-        // Explicitly no shadow on the idle state; the selected state is
-        // distinguished by fill alone, per the brief.
-        elevation: 0,
-        shadowOpacity: 0,
+        overflow: 'visible',
     },
-    dot: {
-        borderRadius: radiusRoles.pill.full,
-        height: 4,
-        width: 4,
+    dayNumber: {
+        fontSize: 17,
+        lineHeight: 22,
+        fontWeight: '600',
+        fontVariant: ['tabular-nums'],
     },
 });

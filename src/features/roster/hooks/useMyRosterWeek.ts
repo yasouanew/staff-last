@@ -5,15 +5,18 @@ import type { AppError } from '../../../types/appError';
 import { queryKeys } from '../../../utils/queryKeys';
 import { addDays, startOfWeek, todayApiDate, weekDates } from '../../../utils/date';
 import { useShifts } from '../../shifts/hooks';
-import type { Shift } from '../../shifts/types';
+import { sectionizeShifts, type ShiftDaySection } from '../utils/sectionizeShifts';
 import { useMyRoster } from './useMyRoster';
 
 /**
  * My Roster week state (spec Screen 5).
  *
  * Primary path is `GET /shifts?employee_id=<own>&date_from=<weekStart>&date_to=<weekEnd>&per_page=50`
- * (spec Screen 5 API 1). The supplementary `GET /rosters?status=published&per_page=10`
- * (API 2) only supplies week chrome — shift times always come from API 1.
+ * (spec Screen 5 API 1). The supplementary
+ * `GET /rosters?status=published&week_start=<weekStart>&week_end=<weekEnd>&per_page=10`
+ * (API 2) only supplies week chrome — shift times always come from API 1. Both
+ * requests are scoped to the selected week, so opening the screen downloads one
+ * week rather than the company's whole published-roster history.
  *
  * Week logic is client-side: no `my-roster` endpoint exists, and the employee role
  * cannot read `company_settings.week_start_day`, so Monday is the documented default
@@ -23,11 +26,14 @@ import { useMyRoster } from './useMyRoster';
  * drafts from employees — only `status=published` weeks are shown.
  */
 
-export type RosterDayGroup = {
-    /** `Y-m-d`. */
-    date: string;
-    shifts: Shift[];
-};
+/**
+ * One day's shifts, keyed by ISO date.
+ *
+ * An alias of [`ShiftDaySection`](src/features/roster/utils/sectionizeShifts.ts:1)
+ * rather than a second shape: the grouping is produced by `sectionizeShifts`, so
+ * a locally-declared twin could drift from the util's contract.
+ */
+export type RosterDayGroup = ShiftDaySection;
 
 export type MyRosterWeek = {
     /** Currently selected day (`Y-m-d`) — drives the week window. */
@@ -100,29 +106,35 @@ export function useMyRosterWeek(initialDate?: string): MyRosterWeek {
     const days = useMemo(() => weekDates(weekStart, 1), [weekStart]);
 
     const shiftsQuery = useShifts({ date_from: weekStart, date_to: weekEnd, per_page: 50 });
-    const rostersQuery = useMyRoster({ status: 'published', per_page: 10 });
+    /*
+     * The chrome request is scoped to the *same* week as the feed. It previously
+     * asked for `status=published&per_page=10` with no date window, so the backend
+     * had to scan/order the company's whole published-roster history on every
+     * screen open — the slow first paint — and the answer never changed as the
+     * user stepped between weeks. `week_start`/`week_end` are the documented
+     * `RosterController@index` filters (spec Screen 5 API 2), so the window is
+     * pushed to the server and the query key moves with the week.
+     */
+    const rostersQuery = useMyRoster({
+        status: 'published',
+        week_start: weekStart,
+        week_end: weekEnd,
+        per_page: 10,
+    });
 
-    const groups = useMemo<RosterDayGroup[]>(() => {
-        const all = shiftsQuery.data?.data ?? [];
-        const sorted = [...all].sort((a, b) => {
-            const byDate = a.date.localeCompare(b.date);
-
-            return byDate !== 0 ? byDate : a.start_time.localeCompare(b.start_time);
-        });
-
-        const byDate = new Map<string, Shift[]>();
-
-        sorted.forEach(shift => {
-            const list = byDate.get(shift.date) ?? [];
-
-            list.push(shift);
-            byDate.set(shift.date, list);
-        });
-
-        return [...byDate.entries()]
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, dayShifts]) => ({ date, shifts: dayShifts }));
-    }, [shiftsQuery.data]);
+    /**
+     * Shifts grouped by day.
+     *
+     * The grouping itself lives in
+     * [`sectionizeShifts`](src/features/roster/utils/sectionizeShifts.ts:1) so the
+     * ordering rule (date ascending, then start time) has exactly one definition —
+     * the screen's day headers and its `getItemLayout` prefix sums both depend on
+     * it, and a second copy here is a second place it could drift.
+     */
+    const groups = useMemo<RosterDayGroup[]>(
+        () => sectionizeShifts(shiftsQuery.data?.data ?? []),
+        [shiftsQuery.data],
+    );
 
     const publishedRosters = useMemo(() => {
         const all = rostersQuery.data?.data ?? [];

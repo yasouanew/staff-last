@@ -51,21 +51,33 @@ describe('formatClockTime', () => {
 });
 
 describe('uses24HourClock / clockInputHint', () => {
-    it('reports the pinned cycle and describes it in the input hint', () => {
+    it('reports the pinned cycle', () => {
         setHourCycleOverride('h23');
         expect(uses24HourClock()).toBe(true);
-        expect(clockInputHint()).toContain('24-hour');
 
         setHourCycleOverride('h12');
         expect(uses24HourClock()).toBe(false);
-        expect(clockInputHint()).not.toContain('24-hour');
     });
 
-    it('agrees with the display format, which is the defect this closes', () => {
+    it('describes the input format identically in every locale', () => {
+        // The field always accepts 24-hour `HH:MM`, so the hint must not change with
+        // the locale's clock cycle — the defect this closes was a 12-hour hint on a
+        // field that only parses 24-hour input.
+        setHourCycleOverride('h23');
+        const hint24 = clockInputHint();
+
+        setHourCycleOverride('h12');
+        const hint12 = clockInputHint();
+
+        expect(hint24).toBe('HH:MM (24h)');
+        expect(hint12).toBe(hint24);
+        expect(hint12).not.toContain('AM/PM');
+    });
+
+    it('agrees with the 24-hour display format', () => {
         setHourCycleOverride('h23');
 
-        // In a 24-hour locale the input hint and the rendered value use one convention.
-        expect(clockInputHint()).toContain('24-hour');
+        expect(clockInputHint()).toContain('24h');
         expect(formatClockTime('14:00')).toBe('14:00');
     });
 });

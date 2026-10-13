@@ -30,6 +30,16 @@ export const STORAGE_KEYS = {
     authUser: '@staffsaas/auth.user.v1',
     /** Device-local preferences (theme, push opt-in). */
     preferences: '@staffsaas/preferences.v1',
+    /**
+     * The user's explicit appearance choice (`light` | `dark` | `system`).
+     *
+     * Deliberately namespaced `@app/` rather than `@staffsaas/` per the 2026
+     * spec, which means it is *not* wiped by [`clearAppStorage`](src/utils/storage.ts:1)
+     * on sign-out — an appearance choice is a device preference, not account
+     * data, and a user who chose dark mode should not be flashed back to light
+     * when they sign out.
+     */
+    colorScheme: '@app/color-scheme',
     /** Last FCM token registered with the backend, used to unregister on logout. */
     fcmToken: '@staffsaas/fcm.token.v1',
     /**

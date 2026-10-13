@@ -141,7 +141,7 @@ export function AppButton({
      * Press ink. Light mode darkens toward black; dark mode must *lighten*, or
      * the tint would be invisible against an already-dark fill.
      */
-    const pressInk = theme.isDark ? '#FFFFFF' : '#000000';
+    const pressInk = theme.isDark ? theme.colors.textInverse : theme.tokens.colors.inkPrimary;
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: interpolate(press.value, [0, 1], [1, pressScale.button]) }],

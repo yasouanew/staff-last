@@ -23,13 +23,14 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { StatusBar, StyleSheet } from 'react-native';
+import { StatusBar, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClientConfig } from './src/config/queryConfig';
 import { RootNavigator } from './src/navigation/RootNavigator';
-import { useTheme } from './src/theme';
+import { ThemeProvider, useTheme } from './src/theme';
+import { useConnectivity } from './src/services/connectivity';
 import { useOutboxSync } from './src/services/outbox/useOutboxSync';
 import { usePushNotifications, usePushStatus } from './src/services/push';
 
@@ -63,6 +64,24 @@ function OutboxBridge(): null {
 }
 
 /**
+ * Drives the connectivity coordinator: watches for offline → online transitions and
+ * runs the ordered recovery pipeline (session refresh, outbox flush, push token
+ * registration, notification reconciliation) before invalidating the affected queries.
+ *
+ * This is what makes "the network came back while the app stayed open" recover without
+ * the user backgrounding and reopening the app — the case the AppState-only retry in
+ * [`usePushStatus`](src/services/push/usePushStatus.ts:1) could not see.
+ *
+ * Like the other bridges it must sit *inside* `QueryClientProvider`, because a completed
+ * recovery invalidates queries.
+ */
+function ConnectivityBridge(): null {
+  useConnectivity();
+
+  return null;
+}
+
+/**
  * Status bar, bound to the *resolved* app theme rather than a hardcoded style.
  *
  * The theme has a full dark variant ([`darkColors`](src/theme/colors.ts:358)) and
@@ -79,7 +98,24 @@ function OutboxBridge(): null {
 function ThemedStatusBar(): React.JSX.Element {
   const theme = useTheme();
 
+  // RN 0.87 is edge-to-edge: `StatusBar.backgroundColor` no longer exists, and
+  // the Android navigation bar is drawn from the app's own background. The
+  // canvas colour is therefore applied to `ThemedRoot` below, which is what
+  // paints behind both system bars.
   return <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />;
+}
+
+/**
+ * Paints the resolved canvas colour behind the whole tree.
+ *
+ * In edge-to-edge mode this is the colour the Android navigation bar and the
+ * status-bar region show through, so binding it to `theme.colors.background`
+ * is what keeps the system chrome in step with the app scheme.
+ */
+function ThemedRoot({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const theme = useTheme();
+
+  return <View style={[styles.root, { backgroundColor: theme.colors.background }]}>{children}</View>;
 }
 
 function App(): React.JSX.Element {
@@ -87,15 +123,27 @@ function App(): React.JSX.Element {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider>
-        <ThemedStatusBar />
+      {/*
+       * `ThemeProvider` sits above everything that reads a token — the status
+       * bar, the navigator and every screen — so a scheme change re-renders the
+       * whole tree from one value. It is deliberately *inside*
+       * `GestureHandlerRootView` (which is scheme-agnostic) and *outside*
+       * `QueryClientProvider` (which is not).
+       */}
+      <ThemeProvider>
+        <ThemedRoot>
+          <SafeAreaProvider>
+            <ThemedStatusBar />
 
-        <QueryClientProvider client={queryClient}>
-          <PushNotificationsBridge />
-          <OutboxBridge />
-          <RootNavigator />
-        </QueryClientProvider>
-      </SafeAreaProvider>
+            <QueryClientProvider client={queryClient}>
+              <PushNotificationsBridge />
+              <OutboxBridge />
+              <ConnectivityBridge />
+              <RootNavigator />
+            </QueryClientProvider>
+          </SafeAreaProvider>
+        </ThemedRoot>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

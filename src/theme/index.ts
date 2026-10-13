@@ -14,6 +14,54 @@
  *    factories that need to declare what they accept.
  */
 
+/* ---- Design tokens (2026) ---- */
+export {
+    colorTokens,
+    colorTokensFor,
+    createThemeTokens,
+    darkColorTokens,
+    darkShadowTokens,
+    darkTheme,
+    darkTokens,
+    getStatusPill,
+    lightColorTokens,
+    lightTheme,
+    lightTokens,
+    radiusTokens,
+    screenPadding,
+    shadowTokens,
+    shadowTokensFor,
+    spacingTokens,
+    statusPillSpec,
+    ThemeContext,
+    tokensFor,
+    typographyTokens,
+    useThemeTokens,
+    type ColorSchemePreference,
+    type ColorTokens,
+    type RadiusTokens,
+    type ResolvedColorScheme,
+    type ShadowToken,
+    type ShadowTokenName,
+    type ShadowTokens,
+    type SpacingTokens,
+    type StatusPillColors,
+    type StatusPillStatus,
+    type ThemeContextValue,
+    type ThemeTokens,
+    type TypeToken,
+    type TypeTokenName,
+    type TypographyTokens,
+} from './tokens';
+
+/* ---- Provider ---- */
+export {
+    ThemeProvider,
+    resolveColorScheme,
+    tokensForScheme,
+    type ThemeProviderProps,
+} from './ThemeProvider';
+
 /* ---- Colours ---- */
 export {
     colors,
@@ -68,17 +116,29 @@ export {
     type Haptics,
 } from './haptics';
 
-export { GRID_UNIT, insets, screenGutter, spacing, type Insets, type Spacing } from './spacing';
+export {
+    GRID_UNIT,
+    insets,
+    screenGutter,
+    space,
+    spacing,
+    type Insets,
+    type Space,
+    type Spacing,
+} from './spacing';
 
 /* ---- Elevation ---- */
 export {
     darkElevation,
+    darkShadows,
     elevationSpecs,
     shadows,
+    shadowsFor,
     type DarkElevation,
     type ElevationSpec,
     type ElevationTier,
     type ShadowLevel,
+    type ShadowSet,
     type Shadows,
 } from './shadows';
 
@@ -114,8 +174,6 @@ export {
 
 /* ---- Assembled themes ---- */
 export {
-    darkTheme,
-    lightTheme,
     theme,
     themeFor,
     type Theme,
@@ -123,3 +181,7 @@ export {
 
 /* ---- Hook + resolution ---- */
 export { getTheme, resolveTheme, useTheme, type AppearancePreference } from './useTheme';
+export {
+    useColorSchemePreference,
+    type ColorSchemePreferenceValue,
+} from './useColorSchemePreference';

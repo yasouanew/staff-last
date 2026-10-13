@@ -1,3 +1,5 @@
+import { radiusTokens } from './tokens';
+
 /**
  * Corner radius rules.
  *
@@ -33,17 +35,17 @@ const micro = {
 const macro = {
     /** 12 — the default card radius. */
     md: 12,
-    /** 16 — bottom sheets and generously padded panels. */
-    lg: 16,
-    /** 20 — full-screen modals and dialogs. */
-    xl: 20,
-    /** 28 — large presentation surfaces, image headers. */
-    xxl: 28,
+    /** 16 — bottom sheets and generously padded panels. Spec `rMd`. */
+    lg: radiusTokens.rMd,
+    /** 20 — full-screen modals and dialogs. Spec `rLg`. */
+    xl: radiusTokens.rLg,
+    /** 28 — large presentation surfaces, image headers. Spec `rXl`. */
+    xxl: radiusTokens.rXl,
 } as const;
 
 const pill = {
-    /** 999 — fully rounded; clamped to half the shorter dimension. */
-    full: 999,
+    /** 999 — fully rounded; clamped to half the shorter dimension. Spec `rPill`. */
+    full: radiusTokens.rPill,
 } as const;
 
 /**
@@ -56,6 +58,18 @@ export const radius = {
     ...micro,
     ...macro,
     ...pill,
+
+    /* ---- Spec-named aliases (2026 design tokens) --------------------- */
+    /** 10 — small objects nested inside a container. */
+    rSm: radiusTokens.rSm,
+    /** 16 — the default card radius. */
+    rMd: radiusTokens.rMd,
+    /** 20 — bottom sheets and generously padded panels. */
+    rLg: radiusTokens.rLg,
+    /** 28 — full-screen modals, hero surfaces. */
+    rXl: radiusTokens.rXl,
+    /** 999 — fully rounded. */
+    rPill: radiusTokens.rPill,
 } as const;
 
 /** Role-grouped views over the same scale. */

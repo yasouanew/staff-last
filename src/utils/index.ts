@@ -59,5 +59,13 @@ export {
     setSecureItem,
 } from './secureStorage';
 
+export {
+    evaluatePasswordStrength,
+    PASSWORD_MIN_LENGTH,
+    PASSWORD_STRENGTH_FILL,
+    PASSWORD_STRENGTH_SEGMENTS,
+    type PasswordStrengthLevel,
+} from './passwordStrength';
+
 export { logger } from './logger';
 export { queryKeys } from './queryKeys';

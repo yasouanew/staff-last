@@ -30,7 +30,10 @@ import { createMockNavigation, setupScreenTest } from '../../src/testing/renderW
  */
 describe('NotificationsScreen', () => {
     const harness = setupScreenTest();
-    const mockNavigation = createMockNavigation<{ goBack: () => void }>();
+    const mockNavigation = createMockNavigation<{
+        goBack: () => void;
+        navigate: (name: string, params?: object) => void;
+    }>();
 
     beforeEach(async () => {
         await harness.setup();
@@ -52,7 +55,7 @@ describe('NotificationsScreen', () => {
 
     describe('1. Loading', () => {
         it('renders row skeletons during the cold first load', async () => {
-            serveInbox(() => new Promise<MockResult>(() => {}));
+            serveInbox(() => new Promise<MockResult>(() => { }));
 
             await renderNotifications();
 
@@ -84,12 +87,10 @@ describe('NotificationsScreen', () => {
 
             await renderNotifications();
 
-            await waitFor(() => expect(screen.getByText('Nothing yet')).toBeTruthy());
+            await waitFor(() => expect(screen.getByText("You're all caught up")).toBeTruthy());
 
             expect(
-                screen.getByText(
-                    'Shift changes, roster updates and leave decisions will show up here.',
-                ),
+                screen.getByText('New roster and leave updates will appear here.'),
             ).toBeTruthy();
             // Nothing unread ⇒ nothing to mark, so the batch action is withheld.
             expect(screen.queryByText('Mark all read')).toBeNull();
@@ -274,10 +275,9 @@ describe('NotificationsScreen', () => {
             const unreadRow = screen.getByLabelText('New shift assigned, unread');
             expect(unreadRow.props.accessibilityRole).toBe('button');
 
-            // ---- A read row is still a target, but drops the modifier ----
+            // ---- A read row is still a target, but drops the unread modifier ----
             const readRow = screen.getByLabelText('Roster published');
             expect(readRow.props.accessibilityRole).toBe('button');
-            expect(readRow.props.accessibilityState.disabled).toBe(true);
 
             // ---- Batch action: a labelled button, not an icon ----
             const markAll = screen.getByText('Mark all read');
@@ -289,7 +289,7 @@ describe('NotificationsScreen', () => {
 
             await renderNotifications();
 
-            await waitFor(() => expect(screen.getByText('Nothing yet')).toBeTruthy());
+            await waitFor(() => expect(screen.getByText("You're all caught up")).toBeTruthy());
 
             fireEvent.press(screen.getByLabelText('Go back'));
 

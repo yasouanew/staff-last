@@ -94,7 +94,11 @@ export const rosterSummarySchema = z.object({
  *   a contract violation findable in a crash report without leaking the payload.
  * @throws `AppError` of kind `server` when the value does not satisfy the schema.
  */
-export function parseApiResponse<T>(schema: z.ZodType<T>, value: unknown, context: string): T {
+export function parseApiResponse<TOutput, TInput = unknown>(
+    schema: z.ZodType<TOutput, z.ZodTypeDef, TInput>,
+    value: unknown,
+    context: string,
+): TOutput {
     const result = schema.safeParse(value);
 
     if (result.success) {

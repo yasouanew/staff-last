@@ -112,7 +112,7 @@ function renderWeek(initialDate?: string): Harness {
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
-    const harness: Harness = { current: null, rerender: () => {} };
+    const harness: Harness = { current: null, rerender: () => { } };
     function Probe(): null {
         const [, setTick] = useState(0);
 
@@ -170,7 +170,7 @@ describe('useMyRosterWeek', () => {
         expect(sent).not.toHaveProperty('to');
     });
 
-    it('requests published roster chrome separately (shift times come from shifts)', () => {
+    it('requests published roster chrome for the same week (shift times come from shifts)', () => {
         mockUseShifts.mockReturnValue({
             data: paginated([]),
             isPending: false,
@@ -183,7 +183,13 @@ describe('useMyRosterWeek', () => {
 
         renderWeek('2026-09-15');
 
-        expect(mockUseMyRoster).toHaveBeenCalledWith({ status: 'published', per_page: 10 });
+        const expectedStart = startOfWeek('2026-09-15', 1);
+        expect(mockUseMyRoster).toHaveBeenCalledWith({
+            status: 'published',
+            week_start: expectedStart,
+            week_end: addDays(expectedStart, 6),
+            per_page: 10,
+        });
     });
 
     it('groups shifts by date sorted by date then start_time', () => {

@@ -78,7 +78,9 @@ export function SegmentedControl({
     const trackStyle = useMemo(
         () => ({
             backgroundColor: theme.colors.surfaceMuted,
-            borderColor: theme.colors.border,
+            // In dark mode the hairline is the primary separator (shadows are
+            // zeroed), so the track's edge uses the spec's `borderHairline`.
+            borderColor: theme.isDark ? theme.colors.borderHairline : theme.colors.border,
             borderRadius: componentRadius.input,
             borderWidth: borderWidths.hairline,
             padding: spacing.xxs,
@@ -186,13 +188,22 @@ const Segment = memo(function Segment({ option, selected, grow, onPress }: Segme
                 grow ? styles.segmentGrow : styles.segmentHug,
                 {
                     backgroundColor: selected ? theme.colors.surface : 'transparent',
-                    borderColor: selected ? theme.colors.border : 'transparent',
+                    // The selected segment is described by a 1px border in both
+                    // schemes. In dark mode that border is the spec's
+                    // `borderHairline` and the shadow below is zeroed, so the
+                    // border alone carries the "raised" state.
+                    borderColor: selected
+                        ? theme.isDark
+                            ? theme.colors.borderHairline
+                            : theme.colors.border
+                        : 'transparent',
                     borderRadius: radius.xs,
                     borderWidth: selected ? borderWidths.hairline : borderWidths.none,
                     opacity: pressed && !isDisabled ? 0.7 : isDisabled ? 0.5 : 1,
                 },
                 // A raised segment needs a lift on Android only; the border does the
-                // work on iOS where a 1pt hairline is already a crisp edge.
+                // work on iOS where a 1pt hairline is already a crisp edge. Dark
+                // mode zeroes the shadow via the scheme's token set.
                 selected ? theme.shadows.low : null,
             ]}>
             <AppText

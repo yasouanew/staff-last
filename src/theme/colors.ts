@@ -28,6 +28,8 @@
  *   essential reading.
  */
 
+import { darkColorTokens, lightColorTokens } from './tokens';
+
 /* ------------------------------------------------------------------ *
  * Layer 1 — raw ramps (primitives)
  * ------------------------------------------------------------------ */
@@ -41,13 +43,13 @@
  * backgrounds derived from it feel like water rather than lavender.
  */
 const oceanBlue = {
-    50: '#EBF3FA',
+    50: lightColorTokens.primarySoft,
     100: '#D3E6F5',
     200: '#A8CDEC',
     300: '#6FABDE',
     400: '#3D86CC',
-    500: '#1B5FA8',
-    600: '#145086',
+    500: lightColorTokens.primary,
+    600: lightColorTokens.primaryPressed,
     700: '#0F406B',
     800: '#0C3355',
     900: '#082542',
@@ -75,18 +77,18 @@ const accentBlue = {
  * use `1000`: they start at `900` so shadows have something to fall onto.
  */
 const neutral = {
-    0: '#FFFFFF',
+    0: lightColorTokens.surface,
     25: '#FCFDFE',
-    50: '#F7F9FC',
-    100: '#EFF3F8',
-    200: '#E2E8F0',
+    50: lightColorTokens.surfaceRaised,
+    100: lightColorTokens.surfaceMuted,
+    200: lightColorTokens.borderHairline,
     300: '#CBD5E1',
     400: '#94A3B8',
-    500: '#64748B',
-    600: '#475569',
+    500: lightColorTokens.inkTertiary,
+    600: lightColorTokens.inkSecondary,
     700: '#334155',
     800: '#1E293B',
-    900: '#16202E',
+    900: lightColorTokens.inkPrimary,
     950: '#0D141F',
     1000: '#080C14',
 } as const;
@@ -121,18 +123,50 @@ const slate = {
  * `#FF0000` reads as a system error, not a declined leave request.
  */
 const semantic = {
-    success: { soft: '#DCF5E4', base: '#157347', strong: '#0F5132' },
-    warning: { soft: '#FDF0D5', base: '#9A6407', strong: '#7A4E05' },
-    danger: { soft: '#FBE3E3', base: '#B3261E', strong: '#8C1D18' },
-    info: { soft: '#DCEAFB', base: '#1A5FB4', strong: '#144A8C' },
+    success: {
+        soft: lightColorTokens.successSoft,
+        base: lightColorTokens.success,
+        strong: '#0A6B4A',
+    },
+    warning: {
+        soft: lightColorTokens.warningSoft,
+        base: lightColorTokens.warning,
+        strong: '#8F5E15',
+    },
+    danger: {
+        soft: lightColorTokens.dangerSoft,
+        base: lightColorTokens.danger,
+        strong: '#9B2721',
+    },
+    info: {
+        soft: lightColorTokens.infoSoft,
+        base: lightColorTokens.info,
+        strong: lightColorTokens.primaryPressed,
+    },
 } as const;
 
 /** Dark-scheme semantic ramps — tinted up so they read on slate, not on white. */
 const semanticDark = {
-    success: { soft: '#123027', base: '#4ADE80', strong: '#86EFAC' },
-    warning: { soft: '#3A2C10', base: '#FBBF24', strong: '#FCD34D' },
-    danger: { soft: '#3A1A19', base: '#F87171', strong: '#FCA5A5' },
-    info: { soft: '#122A45', base: '#60A5FA', strong: '#93C5FD' },
+    success: {
+        soft: darkColorTokens.successSoft,
+        base: darkColorTokens.success,
+        strong: '#86EFAC',
+    },
+    warning: {
+        soft: darkColorTokens.warningSoft,
+        base: darkColorTokens.warning,
+        strong: '#FCD34D',
+    },
+    danger: {
+        soft: darkColorTokens.dangerSoft,
+        base: darkColorTokens.danger,
+        strong: '#FCA5A5',
+    },
+    info: {
+        soft: darkColorTokens.infoSoft,
+        base: darkColorTokens.info,
+        strong: '#93C5FD',
+    },
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -165,6 +199,12 @@ export interface Colors {
      * surface rather than a stack of boxed rows.
      */
     hairline: string;
+    /**
+     * The 2026 spec's border token. In dark mode this is the *primary separator*
+     * — it replaces shadows entirely, so every elevated component (cards, FAB,
+     * tab bar, sticky bars) carries a 1px border in this colour.
+     */
+    borderHairline: string;
 
     /* ---- Glass / focus (Soft-UI refinement) ---- */
     /** Translucent fill laid over a blur to build a glassmorphism surface. */
@@ -258,6 +298,8 @@ export const lightColors = {
     divider: neutral[200],
     /** Fainter than `divider` — intra-card row separators. */
     hairline: 'rgba(15, 23, 42, 0.08)',
+    /** The 2026 spec's border token — the light scheme's `#E4E9F0`. */
+    borderHairline: lightColorTokens.borderHairline,
 
     /* ---- Glass / focus ------------------------------------------------ */
 
@@ -358,12 +400,12 @@ export const lightColors = {
 export const darkColors: { [K in keyof Colors]: string } = {
     /* ---- Structure -------------------------------------------------- */
 
-    /** Canvas — deepest slate. Not pure black, so shadows still register. */
-    background: slate[950],
+    /** Canvas — deepest surface. Not pure black, so elevation still registers. */
+    background: darkColorTokens.background,
     /** Raised surface. One step up from the canvas = perceptible elevation. */
-    surface: slate[800],
+    surface: darkColorTokens.surface,
     /** Pressed/inert fill — sits between `surface` and `background`. */
-    surfaceMuted: slate[700],
+    surfaceMuted: darkColorTokens.surfaceMuted,
     /** Sectioned well, *below* the canvas in luminance terms. */
     surfaceSunken: slate[900],
     /** Inverted surface: light in dark mode, for a high-contrast toast. */
@@ -374,6 +416,12 @@ export const darkColors: { [K in keyof Colors]: string } = {
     divider: slate[600],
     /** Fainter than `divider` — intra-card row separators. */
     hairline: 'rgba(255, 255, 255, 0.10)',
+    /**
+     * The 2026 spec's border token. In dark mode this is the *primary separator*
+     * — it replaces shadows entirely, so every elevated component carries a 1px
+     * border in this colour.
+     */
+    borderHairline: darkColorTokens.borderHairline,
 
     /* ---- Glass / focus ------------------------------------------------ */
 
@@ -386,13 +434,13 @@ export const darkColors: { [K in keyof Colors]: string } = {
 
     /* ---- Text: mirrors the four light-mode tiers ----------------------- */
 
-    /** Tier 1. 14.6:1 on `surface`. */
-    text: neutral[50],
+    /** Tier 1. AA on `surface`. */
+    text: darkColorTokens.inkPrimary,
     /** Tier 2 — slightly desaturated so it recedes without going grey. */
-    textSecondary: slate[50],
-    /** Tier 3 — placeholders and metadata. 5.4:1 on `surface`. */
-    textMuted: slate[100],
-    /** Tier 4 — disabled only. 3.4:1 on `surface`. */
+    textSecondary: darkColorTokens.inkSecondary,
+    /** Tier 3 — placeholders and metadata. */
+    textMuted: darkColorTokens.inkTertiary,
+    /** Tier 4 — disabled only. Never used for essential reading. */
     textDisabled: slate[200],
     /** Foreground on `primary`/`danger`. Dark mode brand fills stay dark-ish. */
     textInverse: neutral[0],
@@ -401,10 +449,10 @@ export const darkColors: { [K in keyof Colors]: string } = {
 
     /* ---- Brand / interactive ---------------------------------------- */
 
-    primary: oceanBlue[400],
-    primaryPressed: oceanBlue[300],
+    primary: darkColorTokens.primary,
+    primaryPressed: darkColorTokens.primaryPressed,
     primaryDisabled: oceanBlue[700],
-    primarySoft: oceanBlue[900],
+    primarySoft: darkColorTokens.primarySoft,
     primaryBorder: oceanBlue[700],
     accent: accentBlue[400],
     accentPressed: accentBlue[300],

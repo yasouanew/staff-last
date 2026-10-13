@@ -172,6 +172,38 @@ describe('leaveApi', () => {
         expect(appendSpy).toHaveBeenCalledWith('employee_id', '42');
     });
 
+    it('accepts the partial 201 body the create endpoint actually returns', async () => {
+        /*
+         * Regression: the create response is a *partial* `LeaveRequestResource`
+         * (spec Screen 9 API 2) — no `attachments`, `approver`, `created_at`, and a
+         * trimmed `leave_type` of `{ id, name }`. Validating it against the full
+         * `leaveRequestSchema` threw "unexpected response", so the mutation rejected
+         * and the screen never navigated back to the list. The unit tests missed it
+         * because they mocked the POST with a full fixture.
+         */
+        mockedApi.post.mockResolvedValueOnce({
+            id: 6,
+            company_id: 3,
+            employee_id: 9,
+            leave_type_id: 2,
+            start_date: '2026-09-20',
+            end_date: '2026-09-21',
+            status: 'pending',
+            total_days: '2.00',
+            employee: { id: 9, full_name: 'Jane Doe' },
+            leave_type: { id: 2, name: 'Annual Leave' },
+        } as never);
+
+        const result = await leaveApi.create({
+            employee_id: 9,
+            leave_type_id: 2,
+            start_date: '2026-09-20',
+            end_date: '2026-09-21',
+        });
+
+        expect(result.id).toBe(6);
+    });
+
     it('queries leave-types for the picker with status=active passthrough', async () => {
         mockedApi.get.mockResolvedValueOnce(paginated([]) as never);
 
@@ -186,6 +218,36 @@ describe('leaveApi', () => {
         mockedApi.get.mockResolvedValueOnce([] as never);
 
         await expect(leaveApi.types()).resolves.toEqual([]);
+    });
+
+    it('accepts a numeric max_days_per_request and normalises it to a string', async () => {
+        // The backend serialises this integer column as a bare number, not a decimal
+        // string. Requiring a string here rejected every real response.
+        mockedApi.get.mockResolvedValueOnce(
+            paginated([
+                {
+                    id: 7,
+                    name: 'last',
+                    code: null,
+                    description: null,
+                    allowance_days: '20.0',
+                    is_paid: true,
+                    allows_rollover: true,
+                    max_rollover_days: '1.0',
+                    requires_approval: true,
+                    allow_half_day: true,
+                    max_days_per_request: 1,
+                    color: '#F59E0B',
+                    status: 'active',
+                },
+            ]) as never,
+        );
+
+        const result = await leaveApi.types({ status: 'active', per_page: 100 });
+
+        expect(Array.isArray(result)).toBe(false);
+        const types = (result as { data: { max_days_per_request: string | null }[] }).data;
+        expect(types[0]?.max_days_per_request).toBe('1');
     });
 
     it('throws a server-kind AppError when a request payload violates the contract', async () => {

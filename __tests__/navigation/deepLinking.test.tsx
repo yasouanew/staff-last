@@ -65,9 +65,11 @@ describe('Deep linking', () => {
             timeout: 3000,
         });
 
-        // When token is provided in the link, the token field is hidden and email is prefilled
+        // The email from the link is prefilled and the guided instruction is shown.
         expect(screen.getByDisplayValue('alex@example.com')).toBeTruthy();
-        expect(screen.getByText('Choose a new password for your account.')).toBeTruthy();
+        expect(
+            screen.getByText('Paste the reset code from your email, then choose a new password.'),
+        ).toBeTruthy();
         expect(screen.getByLabelText('New password')).toBeTruthy();
 
         // There was no token to restore, so nothing authenticated was attempted.

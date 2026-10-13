@@ -1,40 +1,58 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Keyboard, StyleSheet, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
-import { AppButton } from '../../../components/AppButton';
 import { AppCard } from '../../../components/AppCard';
-import { AppHeader } from '../../../components/AppHeader';
 import { AppIcon } from '../../../components/AppIcon';
-import { MailCheckGlyph } from '../../../components/AppIcon/glyphs';
+import { CheckCircleGlyph } from '../../../components/AppIcon/glyphs';
 import { AppText } from '../../../components/AppText';
-import { AppTextInput } from '../../../components/AppTextInput';
 import { FormErrorPanel } from '../../../components/FormErrorPanel';
 import { KeyboardAwareView, useKeyboardAwareField } from '../../../components/KeyboardAwareView';
+import { PrimaryButton, TextField } from '../../../components/ui';
 import { useClearRootError } from '../../../hooks';
 import type { AuthStackParamList } from '../../../navigation/types';
 import { spacing } from '../../../theme/spacing';
 import { useTheme } from '../../../theme/useTheme';
 import type { AppError } from '../../../types/appError';
 import { toFieldErrorMap } from '../../../utils/errors';
+import { AuthHeader } from '../components';
 import { useForgotPassword } from '../hooks';
 import { forgotPasswordSchema, type ForgotPasswordFormValues } from '../validation';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
+/** The submit lifecycle. `sent` swaps the body for the confirmation card. */
+type SubmitStatus = 'idle' | 'sending' | 'sent';
+
+/* ---- Spec geometry -------------------------------------------------- */
+
+/** Body horizontal gutter — the spec's 24. */
+const BODY_PADDING = 24;
+/** Success badge diameter — the spec's 80. */
+const SUCCESS_BADGE_SIZE = 80;
+/** Success glyph size — the spec's 56. */
+const SUCCESS_ICON_SIZE = 56;
+
 /**
  * Forgot password (spec Screen 2 — Recovery Screen).
  *
- * ## Header, not a native bar
+ * ## Structure
  *
- * The header is rendered by [`AppHeader`](src/components/AppHeader/AppHeader.tsx:1)
- * inside the scroller (`headerShown: false` on the stack), and its back affordance
- * is the Phase 4 **left back-arrow icon** rather than the previous "Back" text.
- * The header is part of the scrolling content deliberately: it means the title
- * scrolls away to give a short device more room for the field and the keyboard,
- * instead of permanently costing 56pt of viewport.
+ * A fixed [`AuthHeader`](src/features/auth/components/AuthHeader.tsx:1) above a
+ * [`KeyboardAwareView`](src/components/KeyboardAwareView/KeyboardAwareView.tsx:1)
+ * scroller. The header owns the top inset and its own 16pt gutter; the scroller
+ * owns the 24pt body gutter. Keeping the two gutters on separate owners is what
+ * stops the header's 16 from compounding with the body's 24.
+ *
+ * ## The clipped-label defect
+ *
+ * The field is [`TextField`](src/components/ui/TextField/TextField.tsx:1), whose
+ * label is a **static** line above the control — never transformed, so it cannot
+ * clip. The 24pt gutter is enforced on the scroller's content container, so the
+ * label always starts at a positive x-offset. This is the same structural fix
+ * the Sign In refactor applied.
  *
  * ## One field, so Return submits
  *
@@ -42,17 +60,24 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
  * `onSubmitEditing` map straight to submit. This is the shortest possible path
  * from "typed my address" to "link on its way".
  *
+ * ## State machine
+ *
+ * `idle → sending → sent` is local state, not navigation. On success the body is
+ * swapped for the confirmation card in place, so the user never leaves the
+ * screen and the back affordance stays available.
+ *
  * ## Anti-enumeration
  *
- * The success state is intentionally one-way and non-enumerating: the backend
- * returns the same message whether or not the address exists, and the UI repeats
- * that indistinguishability rather than confirming "we found your account". This is
- * a deliberate security property, not an oversight. The fallback CTA is worded as
- * "I already have a reset code" so it does not leak whether the address was
- * recognised.
+ * The success copy is deliberately non-enumerating: the backend returns the same
+ * message whether or not the address exists, and the UI repeats that
+ * indistinguishability rather than confirming "we found your account". The
+ * fallback link is worded as "Already have a reset code?" so it does not leak
+ * whether the address was recognised.
  */
 export function ForgotPasswordScreen({ navigation }: Props): React.JSX.Element {
     const theme = useTheme();
+
+    const [status, setStatus] = useState<SubmitStatus>('idle');
 
     const {
         control,
@@ -73,10 +98,16 @@ export function ForgotPasswordScreen({ navigation }: Props): React.JSX.Element {
 
     const onSubmit = handleSubmit(async values => {
         Keyboard.dismiss();
+        setStatus('sending');
 
         try {
             await requestReset.mutateAsync(values);
+            setStatus('sent');
         } catch (error) {
+            // Back to `idle` so the form is editable again and the button is
+            // re-armed; the error is painted below the field.
+            setStatus('idle');
+
             const appError = error as AppError;
 
             if (appError.kind === 'validation' && appError.fieldErrors) {
@@ -103,146 +134,184 @@ export function ForgotPasswordScreen({ navigation }: Props): React.JSX.Element {
 
     const rootError = errors.root?.message;
 
-    /**
-     * Success replaces the form but keeps the header, and keeps the back arrow:
-     * a user who has finished reading the confirmation must still be able to leave.
-     */
-    if (requestReset.isSuccess) {
-        return (
-            <KeyboardAwareView ownsTopInset>
-                <AppHeader title="Check your email" onBack={goBack} flat separator={false} />
-
-                <View style={[styles.stack, { gap: theme.spacing.xl }]}>
-                    <AppCard elevated="low" padded>
-                        <View style={[styles.confirmation, { gap: theme.spacing.sm }]}>
-                            <AppIcon
-                                icon={MailCheckGlyph}
-                                size="large"
-                                color="success"
-                                accessibilityLabel="Reset link sent"
-                            />
-
-                            <AppText variant="subtitle">
-                                If an account exists for that address, a password reset link is
-                                on its way.
-                            </AppText>
-
-                            <AppText variant="caption" color="textMuted">
-                                Nothing arrived? Check your spam folder before requesting another
-                                link — the reset endpoint is rate limited.
-                            </AppText>
-                        </View>
-                    </AppCard>
-
-                    <View style={[styles.actions, { gap: theme.spacing.sm }]}>
-                        <AppButton
-                            label="Back to sign in"
-                            onPress={() => navigation.navigate('Login')}
-                            fullWidth
-                        />
-
-                        <AppButton
-                            label="I already have a reset code"
-                            onPress={() => navigation.navigate('ResetPassword')}
-                            variant="secondary"
-                            fullWidth
-                        />
-                    </View>
-                </View>
-            </KeyboardAwareView>
-        );
-    }
-
     return (
-        <KeyboardAwareView ownsTopInset>
-            <AppHeader title="Forgot password" onBack={goBack} flat separator={false} />
+        <View style={[styles.screen, { backgroundColor: theme.colors.surface }]}>
+            <AuthHeader title="Forgot password" onBack={goBack} />
 
-            <View style={[styles.stack, { gap: theme.spacing.xl }]}>
-                <View style={[styles.infoBlock, { gap: theme.spacing.sm }]}>
-                    {/* `subtitle` (17/24) rather than `body`: this is the one
-                        sentence that explains the whole screen, so it is given the
-                        same weight as a section lead. */}
-                    <AppText variant="subtitle">
-                        Enter the email address on your account and we will send a reset link.
-                    </AppText>
+            <KeyboardAwareView
+                ownsTopInset={false}
+                backgroundColor={theme.colors.surface}
+                contentContainerStyle={styles.content}>
+                {status === 'sent' ? (
+                    <View style={styles.body}>
+                        <AppCard elevated="low" padded>
+                            <View style={styles.confirmation}>
+                                <View
+                                    style={[
+                                        styles.successBadge,
+                                        { backgroundColor: theme.colors.successSoft },
+                                    ]}>
+                                    <AppIcon
+                                        icon={CheckCircleGlyph}
+                                        sizePoints={SUCCESS_ICON_SIZE}
+                                        color="success"
+                                        accessibilityLabel="Reset link sent"
+                                    />
+                                </View>
 
-                    <AppText variant="caption" color="textMuted">
-                        The link expires shortly, so use it soon. Reset requests are rate limited.
-                    </AppText>
-                </View>
+                                <AppText
+                                    variant="title"
+                                    align="center"
+                                    style={[
+                                        styles.confirmationTitle,
+                                        { color: theme.tokens.colors.inkPrimary },
+                                    ]}>
+                                    Check your email
+                                </AppText>
 
-                <View style={[styles.form, { gap: theme.spacing.md }]}>
-                    <View {...email.wrapperProps}>
-                        <Controller
-                            control={control}
-                            name="email"
-                            render={({ field }) => (
-                                <AppTextInput
-                                    label="Email"
-                                    value={field.value}
-                                    onChangeText={text => {
-                                        field.onChange(text);
-                                        clearRootError();
-                                    }}
-                                    onBlur={field.onBlur}
-                                    onFocus={email.onFocus}
-                                    error={errors.email?.message}
-                                    keyboardType="email-address"
-                                    // An address is never capitalised; leaving the OS
-                                    // default on would let the keyboard ship
-                                    // "John@Example.com" to a lookup that lowercases.
-                                    autoCapitalize="none"
-                                    autoComplete="email"
-                                    autoCorrect={false}
-                                    textContentType="emailAddress"
-                                    returnKeyType="done"
-                                    onSubmitEditing={submitFromKeyboard}
-                                    required
-                                />
-                            )}
-                        />
+                                <AppText
+                                    variant="body"
+                                    align="center"
+                                    style={{ color: theme.tokens.colors.inkSecondary }}>
+                                    If an account exists for that address, a password reset link is
+                                    on its way. The link expires shortly, so use it soon.
+                                </AppText>
+                            </View>
+                        </AppCard>
+
+                        <Pressable
+                            accessibilityRole="link"
+                            accessibilityLabel="Back to sign in"
+                            onPress={() => navigation.navigate('Login')}
+                            hitSlop={12}
+                            style={styles.resetLink}>
+                            <AppText
+                                variant="bodyStrong"
+                                align="center"
+                                style={{ color: theme.colors.primary }}>
+                                Back to sign in
+                            </AppText>
+                        </Pressable>
                     </View>
+                ) : (
+                    <View style={styles.body}>
+                        <AppText
+                            variant="title"
+                            style={[styles.hero, { color: theme.tokens.colors.inkPrimary }]}>
+                            Enter the email address on your account and we will send a reset link.
+                        </AppText>
 
-                    {rootError !== undefined ? <FormErrorPanel message={rootError} /> : null}
+                        <AppText
+                            variant="body"
+                            style={[styles.secondary, { color: theme.tokens.colors.inkSecondary }]}>
+                            The link expires shortly, so use it soon. Reset requests are rate
+                            limited.
+                        </AppText>
 
-                    <AppButton
-                        label="Send reset link"
-                        onPress={onSubmit}
-                        loading={requestReset.isPending}
-                        fullWidth
-                        size="lg"
-                    />
+                        <View {...email.wrapperProps} style={styles.field}>
+                            <Controller
+                                control={control}
+                                name="email"
+                                render={({ field }) => (
+                                    <TextField
+                                        label="Email"
+                                        value={field.value}
+                                        onChangeText={text => {
+                                            field.onChange(text);
+                                            clearRootError();
+                                        }}
+                                        onBlur={field.onBlur}
+                                        onFocus={email.onFocus}
+                                        error={errors.email?.message}
+                                        keyboardType="email-address"
+                                        // An address is never capitalised; leaving the OS
+                                        // default on would let the keyboard ship
+                                        // "John@Example.com" to a lookup that lowercases.
+                                        autoCapitalize="none"
+                                        autoComplete="email"
+                                        autoCorrect={false}
+                                        textContentType="emailAddress"
+                                        returnKeyType="done"
+                                        onSubmitEditing={submitFromKeyboard}
+                                        required
+                                    />
+                                )}
+                            />
+                        </View>
 
-                    <AppButton
-                        label="Already have a reset code?"
-                        onPress={() => navigation.navigate('ResetPassword')}
-                        variant="text"
-                        size="sm"
-                        fullWidth={false}
-                    />
-                </View>
-            </View>
-        </KeyboardAwareView>
+                        {rootError !== undefined ? <FormErrorPanel message={rootError} /> : null}
+
+                        <PrimaryButton
+                            label="Send reset link"
+                            onPress={onSubmit}
+                            loading={status === 'sending'}
+                            style={styles.cta}
+                        />
+
+                        <Pressable
+                            accessibilityRole="link"
+                            accessibilityLabel="Already have a reset code?"
+                            onPress={() => navigation.navigate('ResetPassword')}
+                            hitSlop={12}
+                            style={styles.resetLink}>
+                            <AppText
+                                variant="bodyStrong"
+                                align="center"
+                                style={{ color: theme.colors.primary }}>
+                                Already have a reset code?
+                            </AppText>
+                        </Pressable>
+                    </View>
+                )}
+            </KeyboardAwareView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    stack: {
-        flexGrow: 1,
+    screen: {
+        flex: 1,
+    },
+    content: {
+        // The spec's 24pt body gutter, enforced on the scroller so the field
+        // label always starts at a positive x-offset — the structural half of
+        // the clipped-label fix.
+        paddingHorizontal: BODY_PADDING,
+    },
+    body: {
         marginTop: spacing.xl,
     },
-    infoBlock: {
-        // Optical inset so the explanatory copy aligns with the text *inside* the
-        // input box rather than with its outer frame.
-        paddingHorizontal: spacing.xxs,
+    hero: {
+        // The spec's 22/28 at weight 600; the `title` token is 22/28 at 700, so
+        // the weight is overridden to match the spec exactly.
+        fontWeight: '600',
     },
-    form: {
-        width: '100%',
+    secondary: {
+        // The spec's 10pt — a half-step off the 4pt grid, kept verbatim.
+        marginTop: 10,
+    },
+    field: {
+        marginTop: spacing.xxl,
+    },
+    cta: {
+        marginTop: spacing.xl,
+    },
+    resetLink: {
+        marginTop: spacing.lg,
+        alignSelf: 'center',
     },
     confirmation: {
         alignItems: 'center',
+        gap: spacing.sm,
     },
-    actions: {
-        width: '100%',
+    successBadge: {
+        width: SUCCESS_BADGE_SIZE,
+        height: SUCCESS_BADGE_SIZE,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmationTitle: {
+        marginTop: spacing.xxs,
     },
 });

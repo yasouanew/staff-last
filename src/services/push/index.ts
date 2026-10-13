@@ -1,4 +1,5 @@
 export {
+    flushPendingNotificationOpen,
     initializePushService,
     refreshPermissionStatus,
     registerBackgroundMessageHandler,

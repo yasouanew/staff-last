@@ -232,13 +232,6 @@ export function BottomSheet({
             return;
         }
 
-        // TEMP DIAGNOSTIC — confirms the exact easing object handed to Reanimated.
-        // eslint-disable-next-line no-console
-        console.log('[BottomSheet][diag] entrance easing.decelerate', {
-            isWorklet: Boolean((easing.decelerate as { __workletHash?: number }).__workletHash),
-            keys: Object.keys(easing.decelerate ?? {}),
-        });
-
         translateY.value = reduceMotion ? 0 : withSpring(0, springs.gentle);
         scrim.value = reduceMotion
             ? 1

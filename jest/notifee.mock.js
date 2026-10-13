@@ -16,6 +16,7 @@ const notifee = {
     displayNotification: jest.fn(async () => 'notification-id'),
     cancelAllNotifications: jest.fn(async () => undefined),
     requestPermission: jest.fn(async () => ({ authorizationStatus: 1 })),
+    getNotificationSettings: jest.fn(async () => ({ authorizationStatus: 1 })),
     getInitialNotification: jest.fn(async () => null),
     onForegroundEvent: jest.fn(() => () => undefined),
     onBackgroundEvent: jest.fn(),

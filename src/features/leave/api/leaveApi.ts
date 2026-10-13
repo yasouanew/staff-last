@@ -9,7 +9,12 @@ import type {
     LeaveType,
     LeaveTypeListParams,
 } from '../types';
-import { leaveRequestSchema, leaveTypeSchema } from '../validation/apiSchemas';
+import {
+    createdLeaveRequestSchema,
+    leaveRequestSchema,
+    leaveTypeSchema,
+    type CreatedLeaveRequest,
+} from '../validation/apiSchemas';
 
 const leaveRequestListSchema = paginatedSchema(leaveRequestSchema);
 
@@ -71,7 +76,7 @@ export const leaveApi = {
      * `total_days` is a hint only — the server recalculates via
      * `LeaveRequestService`.
      */
-    async create(payload: CreateLeaveRequestPayload): Promise<LeaveRequest> {
+    async create(payload: CreateLeaveRequestPayload): Promise<CreatedLeaveRequest> {
         if (payload.attachments !== undefined && payload.attachments.length > 0) {
             const formData = new FormData();
 
@@ -106,7 +111,7 @@ export const leaveApi = {
 
             const created = await postMultipart<unknown>('/leave-requests', formData);
 
-            return parseApiResponse(leaveRequestSchema, created, 'POST /leave-requests');
+            return parseApiResponse(createdLeaveRequestSchema, created, 'POST /leave-requests');
         }
 
         const jsonBody = { ...payload };
@@ -114,7 +119,7 @@ export const leaveApi = {
 
         const created = await api.post<unknown, typeof jsonBody>('/leave-requests', jsonBody);
 
-        return parseApiResponse(leaveRequestSchema, created, 'POST /leave-requests');
+        return parseApiResponse(createdLeaveRequestSchema, created, 'POST /leave-requests');
     },
 
     /**

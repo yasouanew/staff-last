@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-
 import React from 'react';
 
 import { LeaveListScreen } from '../../src/features/leave/screens/LeaveListScreen';
-import { formatTotalDays } from '../../src/features/leave/utils/leaveRequest';
+import { formatLeaveRange } from '../../src/features/leave/utils/leaveRequest';
 import { leaveRequest, paginated, paginationMeta } from '../../src/testing/api/fixtures';
 import { fail, ok, type MockResult, type MockRequest } from '../../src/testing/api/mockServer';
 import {
@@ -10,7 +10,6 @@ import {
     createMockRoute,
     setupScreenTest,
 } from '../../src/testing/renderWithProviders';
-import { formatDate } from '../../src/utils/date';
 
 /**
  * Screen integration tests — My Leave (spec Screen 8).
@@ -66,8 +65,8 @@ describe('LeaveListScreen', () => {
             isPendingProbe(request)
                 ? ok(paginated([], paginationMeta({ total: pendingTotal })))
                 : typeof feed === 'function'
-                  ? feed()
-                  : feed,
+                    ? feed()
+                    : feed,
         );
     };
 
@@ -85,7 +84,7 @@ describe('LeaveListScreen', () => {
 
     describe('1. Loading', () => {
         it('renders card-shaped skeletons on the first page load', async () => {
-            serveLeave(() => new Promise<MockResult>(() => {}));
+            serveLeave(() => new Promise<MockResult>(() => { }));
 
             await renderLeave();
 
@@ -99,7 +98,7 @@ describe('LeaveListScreen', () => {
     });
 
     describe('2. Success', () => {
-        it('renders a card per request with type, dates, days and status', async () => {
+        it('renders a card per request with type, full date range, day-part and status', async () => {
             const request = leaveRequest();
 
             serveLeave(() => ok(paginated([request])), 1);
@@ -110,36 +109,29 @@ describe('LeaveListScreen', () => {
 
             await waitFor(() => expect(card()).toBeTruthy());
 
-            const dates = `${formatDate(request.start_date)} – ${formatDate(request.end_date)}`;
+            const range = formatLeaveRange(request.start_date, request.end_date);
 
             expect(within(card()).getByText('Annual Leave')).toBeTruthy();
-            expect(
-                within(card()).getByText(`${dates} · ${formatTotalDays(request.total_days)}`),
-            ).toBeTruthy();
-            // A multi-day request describes both edge sessions, so the label reads as a
-            // range rather than collapsing to a single "Full day".
-            expect(within(card()).getByText('Full day → Full day')).toBeTruthy();
-            expect(within(card()).getByText('Family trip')).toBeTruthy();
-            // Status is encoded twice — as the badge label and as the card's accent strip —
-            // and the badge is scoped to the card because the filter row carries the same
-            // words as chips.
+            // The range is collapsed by `formatLeaveRange`, so a same-day request does
+            // not repeat the date and a same-month range shortens to "1 – 2 Oct 2026".
+            expect(within(card()).getByText(range)).toBeTruthy();
+            // The day-part is its own row, so a full-day request reads "Full day" once.
+            expect(within(card()).getByText('Full day')).toBeTruthy();
+            // Status is carried by the shared badge alone — the accent strip is gone.
             expect(within(card()).getByText('Pending')).toBeTruthy();
-            // The subtitle counts what is awaiting a decision, not what is on screen.
-            expect(screen.getByText('1 awaiting a decision')).toBeTruthy();
+            // The subtitle is the spec's fixed line, not a live pending count.
+            expect(screen.getByText('Your leave requests.')).toBeTruthy();
         });
     });
 
     describe('3. Empty', () => {
-        it('renders the empty state with a call to action when there are no requests', async () => {
+        it('renders the per-filter empty state when there are no requests', async () => {
             serveLeave(() => ok(paginated([])));
 
             await renderLeave();
 
-            await waitFor(() => expect(screen.getByText('No leave requests')).toBeTruthy());
+            await waitFor(() => expect(screen.getByText('No leave requests.')).toBeTruthy());
 
-            expect(
-                screen.getByText('You have not submitted any leave requests yet. Tap + to request leave.'),
-            ).toBeTruthy();
             expect(screen.getByText('Your leave requests.')).toBeTruthy();
             expect(screen.getByTestId('leave-fab')).toBeTruthy();
         });
@@ -186,7 +178,7 @@ describe('LeaveListScreen', () => {
             expect(list().props.refreshing).toBe(false);
 
             harness.server.reset();
-            serveLeave(() => new Promise<MockResult>(() => {}));
+            serveLeave(() => new Promise<MockResult>(() => { }));
 
             await pullToRefresh();
 
@@ -195,6 +187,27 @@ describe('LeaveListScreen', () => {
     });
 
     describe('7. Action success', () => {
+        it('refetches the feed when the screen regains focus', async () => {
+            serveLeave(() => ok(paginated([leaveRequest()])));
+
+            await renderLeave();
+            await waitFor(() => expect(screen.getByText('Annual Leave')).toBeTruthy());
+
+            const before = harness.server.hitCount('/leave-requests');
+
+            // Returning from the create modal fires `focus`; the feed must refetch so
+            // the new request appears without a manual pull-to-refresh.
+            await act(async () => {
+                (mockNavigation as unknown as { emitEvent: (type: string) => void }).emitEvent(
+                    'focus',
+                );
+            });
+
+            await waitFor(() =>
+                expect(harness.server.hitCount('/leave-requests')).toBeGreaterThan(before),
+            );
+        });
+
         it('shows a newly decided request after a successful refresh', async () => {
             let response: MockResult = ok(paginated([leaveRequest({ status: 'pending' })]));
 
@@ -278,12 +291,12 @@ describe('LeaveListScreen', () => {
             serveLeave(() => ok(paginated([])));
 
             await renderLeave();
-            await waitFor(() => expect(screen.getByText('No leave requests')).toBeTruthy());
+            await waitFor(() => expect(screen.getByText('No leave requests.')).toBeTruthy());
 
             fireEvent.press(screen.getByTestId('leave-filter-approved'));
 
             await waitFor(() =>
-                expect(screen.getByText('You have no approved leave requests.')).toBeTruthy(),
+                expect(screen.getByText('No approved requests.')).toBeTruthy(),
             );
 
             // The filter is applied server-side, and an absent `status` means "every

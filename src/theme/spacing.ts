@@ -1,3 +1,5 @@
+import { screenPadding as screenPaddingToken, spacingTokens } from './tokens';
+
 /**
  * Spacing scale — an explicit 8pt grid.
  *
@@ -56,6 +58,24 @@ export const GRID_UNIT = 8;
 export const screenGutter = spacing.md;
 
 /**
+ * Global horizontal screen padding — the 2026 spec's 20pt gutter.
+ *
+ * Every screen, header and tab bar aligns on this one vertical rule. It is a
+ * named token rather than a scale step because it is a *layout contract*, not a
+ * gap: changing it re-gutters the whole app at once.
+ */
+export const screenPadding = screenPaddingToken;
+
+/**
+ * The 2026 spec's 4pt-grid scale, exposed under its own names.
+ *
+ * Kept separate from `spacing` because the spec's `md` (12) and `lg` (16) do not
+ * line up with the legacy 8pt-grid names, and silently re-pointing the legacy
+ * keys would shift every existing layout. New code should prefer this scale.
+ */
+export const space = spacingTokens;
+
+/**
  * Named inset tokens for grouped "settings" style lists, where the outer gutter
  * and the inner content inset are deliberately different values.
  */
@@ -69,3 +89,4 @@ export const insets = {
 
 export type Spacing = typeof spacing;
 export type Insets = typeof insets;
+export type Space = typeof space;

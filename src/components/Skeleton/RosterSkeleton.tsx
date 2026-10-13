@@ -3,13 +3,21 @@ import { StyleSheet, View } from 'react-native';
 import { radiusRoles } from '../../theme/radius';
 import { spacing } from '../../theme/spacing';
 import { useTheme } from '../../theme/useTheme';
+import { SHIFT_ROW_HEIGHT } from '../ShiftCard';
 import { SkeletonGroup, SkeletonRect } from './Skeleton';
 
 /** Mirrors the `WeekDayStrip` cell height so the strip does not resize on load. */
-const DAY_CELL_HEIGHT = 72;
+const DAY_CELL_HEIGHT = 64;
 
-/** Mirrors the `ShiftCard` fixed row height (see that component's docblock). */
-export const SHIFT_ROW_HEIGHT = 76;
+/** Mirrors the `WeekDayStrip` cell radius (14) so the placeholder matches. */
+const DAY_CELL_RADIUS = 14;
+
+/**
+ * Re-exported from [`ShiftCard`](src/components/ShiftCard/ShiftCard.tsx:1) rather
+ * than redeclared: the skeleton exists to match the real row's height, so a second
+ * literal here is a value that can silently drift from the card it is imitating.
+ */
+export { SHIFT_ROW_HEIGHT };
 
 /**
  * Roster-specific skeleton compositions.
@@ -43,7 +51,7 @@ export function SkeletonDayStrip(): React.JSX.Element {
     return (
         <SkeletonGroup>
             <View
-                style={[styles.strip, { gap: spacing.xs }]}
+                style={styles.strip}
                 accessibilityRole="progressbar"
                 accessibilityLabel="Loading days"
                 testID="skeleton-day-strip">
@@ -51,7 +59,7 @@ export function SkeletonDayStrip(): React.JSX.Element {
                     <SkeletonRect
                         key={index}
                         height={DAY_CELL_HEIGHT}
-                        radius={radiusRoles.macro.md}
+                        radius={DAY_CELL_RADIUS}
                         style={styles.dayCell}
                     />
                 ))}
@@ -153,6 +161,9 @@ const styles = StyleSheet.create({
     },
     strip: {
         flexDirection: 'row',
+        // Matches the real strip's inter-cell gap so the placeholder does not
+        // resize when the week loads.
+        gap: 6,
         width: '100%',
     },
     dayCell: {

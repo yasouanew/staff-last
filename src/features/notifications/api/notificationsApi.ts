@@ -24,6 +24,11 @@ export const notificationsApi = {
      * The controller returns a custom wrapper (`data.notifications` + `data.unread_count`
      * + `data.meta`) rather than a Laravel paginator, so the rows are read from the
      * `notifications` key. See spec §6 API 1.
+     *
+     * `params.since` is the reconciliation cursor: when present the server returns only
+     * rows created after that instant, which is how the reconnect sync fetches the gap
+     * rather than the whole feed. It is omitted (not sent as `undefined`) when absent so
+     * the request URL stays clean and the backend's "from the beginning" default applies.
      */
     async list(params: NotificationListParams = {}): Promise<NotificationListResponse> {
         const data = await api.get<unknown>('/notifications', { params });

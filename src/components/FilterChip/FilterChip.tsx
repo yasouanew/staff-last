@@ -1,35 +1,35 @@
 import { Pressable, StyleSheet } from 'react-native';
 
-import { borderWidths } from '../../theme/sizing';
-import { spacing } from '../../theme/spacing';
-import { lineHeight } from '../../theme/typography';
 import { useTheme } from '../../theme/useTheme';
 import { AppText } from '../AppText/AppText';
 
 /**
- * Filter chip — the Status Pill Badge's anatomy, re-pointed at *selection*.
+ * Filter chip — a selectable pill for a filter row.
  *
- * The design lineage is deliberate: this is the same stadium shape, the same
- * token-derived height floor, and the same one-line ellipsis contract as
- * [`StatusBadge`](src/components/StatusBadge/StatusBadge.tsx:74). What changes is
- * the semantic axis. A badge reports a fact the server owns; a chip reports a
- * choice the *user* owns. So the colour pair is driven by `selected`, not by a
- * status enum, and the accessibility role is `button` with an explicit selected
- * state rather than a passive `text` node.
+ * The design lineage is deliberate: this is the same stadium shape and the same
+ * one-line ellipsis contract as [`StatusBadge`](src/components/StatusBadge/StatusBadge.tsx:1).
+ * What changes is the semantic axis. A badge reports a fact the server owns; a
+ * chip reports a choice the *user* owns. So the colour pair is driven by
+ * `selected`, not by a status enum, and the accessibility role is `button` with an
+ * explicit selected state rather than a passive `text` node.
  *
- * Two constraints worth stating, because they are what keep the row from
- * twitching:
+ * ## Geometry (2026 spec)
  *
- *  1. **Selection never changes width.** The label is identical in both states and
- *     is never prefixed with a tick glyph. A chip that grows when picked shoves
- *     every chip to its right, which makes a filter row feel broken on a phone.
- *  2. **The visual pill stays slim; the touch box does not.** A 44pt-tall pill
- *     beside a 44pt card reads as clumsy, so the pill keeps its badge height and a
- *     `hitSlop` of `spacing.xs` lifts the *effective* target to 44pt. Geometry is
- *     left to the eye; accessibility is left to the numbers.
+ * Height 34, horizontal padding 14, radius 999, `caption` at weight 600. The
+ * selected chip is a solid brand fill with white text and a `shadowCard` lift, so
+ * the active filter reads as a raised object rather than merely a darker one.
  *
- * Deliberately takes no `tone` prop. Selection is binary, and offering a colour
- * per chip would invite a row of six hues that means nothing.
+ * ## Counts
+ *
+ * A count renders inline as `Label · 4` in the same text node, not as a nested
+ * badge, so the pill never has to grow a second row. The count is part of the
+ * label, so it is announced too.
+ *
+ * ## Selection never changes width
+ *
+ * The label is identical in both states and is never prefixed with a tick glyph.
+ * A chip that grows when picked shoves every chip to its right, which makes a
+ * filter row feel broken on a phone.
  */
 export type FilterChipProps = {
     label: string;
@@ -49,6 +49,11 @@ export type FilterChipProps = {
     testID?: string;
 };
 
+/** The spec's painted height. */
+export const FILTER_CHIP_HEIGHT = 34;
+/** The spec's horizontal padding. */
+const CHIP_PADDING_HORIZONTAL = 14;
+
 export function FilterChip({
     label,
     selected,
@@ -60,13 +65,11 @@ export function FilterChip({
     const theme = useTheme();
 
     /**
-     * Selected = solid Deep Ocean Blue with the on-primary foreground.
-     * Inactive = the soft grey track used by every inactive surface in the app,
-     * with a hairline so a chip beside a similarly-grey card still has an edge.
+     * Selected = solid brand fill with the on-primary foreground and a card lift.
+     * Inactive = the soft grey track used by every inactive surface in the app.
      */
     const background = selected ? theme.colors.primary : theme.colors.surfaceMuted;
     const foreground = selected ? theme.colors.onPrimary : theme.colors.textSecondary;
-    const border = selected ? theme.colors.primary : theme.colors.border;
 
     const text = count !== undefined ? `${label} · ${count}` : label;
 
@@ -77,27 +80,25 @@ export function FilterChip({
             accessibilityState={{ selected, disabled }}
             disabled={disabled}
             onPress={onPress}
-            // See the docblock: the pill is intentionally shorter than 44pt, and
-            // hitSlop is what makes it conform.
-            hitSlop={spacing.xs}
+            // The pill is 34pt, below the 44pt platform minimum, so the touch area
+            // is widened without changing the visual geometry.
+            hitSlop={theme.spacing.xs}
             testID={testID}
             style={({ pressed }) => [
                 styles.chip,
+                selected ? theme.tokens.shadows.shadowCard : null,
                 {
                     backgroundColor: background,
-                    borderColor: border,
-                    borderRadius: theme.radius.full,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    minHeight: lineHeight.xs + spacing.xxs * 2,
+                    borderRadius: theme.tokens.radius.rPill,
+                    paddingHorizontal: CHIP_PADDING_HORIZONTAL,
                     // Pressed dims but never scales: a scaling chip would drag its
                     // neighbours around for the length of the animation.
                     opacity: pressed && !disabled ? 0.7 : disabled ? 0.5 : 1,
                 },
             ]}>
             <AppText
-                variant="label"
-                style={{ color: foreground }}
+                variant="caption"
+                style={[styles.label, { color: foreground }]}
                 numberOfLines={1}
                 ellipsizeMode="tail">
                 {text}
@@ -113,16 +114,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: borderWidths.hairline,
+        height: FILTER_CHIP_HEIGHT,
         // With `numberOfLines={1}` the label ellipsises at the pill's edge rather
         // than overflowing the horizontal scroller.
         maxWidth: 200,
     },
+    label: {
+        // The spec's caption tier at weight 600 (one step above `caption`'s 500).
+        fontWeight: '600',
+    },
 });
-
-/**
- * The chip's painted height, for a caller that needs to reserve the filter lane
- * before the chips are measured (a skeleton, or a `getItemLayout`).
- */
-export const FILTER_CHIP_HEIGHT =
-    lineHeight.xs + spacing.xxs * 2 + borderWidths.hairline * 2;

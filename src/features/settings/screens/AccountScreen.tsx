@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppCard } from '../../../components/AppCard';
 import { AppHeader } from '../../../components/AppHeader';
@@ -19,40 +20,50 @@ import { AppListItem } from '../../../components/AppListItem';
 import { AppText } from '../../../components/AppText';
 import { ScreenContainer } from '../../../components/ScreenContainer';
 import type { AccountStackParamList } from '../../../navigation/types';
-import { avatarSizes, borderWidths } from '../../../theme/sizing';
-import { radius, radiusRoles, spacing, useTheme } from '../../../theme';
+import { useTheme } from '../../../theme/useTheme';
+import { useColorSchemePreference } from '../../../theme/useColorSchemePreference';
 import { useSession, useSignOut, useSignOutEverywhere } from '../../auth/hooks';
 import { useSessionStore } from '../../auth/store/sessionStore';
 import { useResendVerification } from '../../profile/hooks';
+import { SettingsGroup, SettingsRow } from '../components';
 import { usePreferencesStore } from '../store/preferencesStore';
 
 type Props = NativeStackScreenProps<AccountStackParamList, 'Account'>;
 
+/** The spec's identity avatar. */
+const AVATAR_SIZE = 56;
+/** The spec's initials type. */
+const INITIALS_SIZE = 20;
+
 /**
- * Account (spec Screen 11) — the settings hub, rebuilt to the Phase 6 brief.
+ * Account (spec Screen 11) — the settings hub.
  *
  * Structure, top to bottom:
  *
- *  1. **Profile Identity Header** — one macro `AppCard` holding a 64pt circular
- *     avatar beside a dense vertical text block (name / corporate email /
- *     operational role). The avatar is *displayed* only.
- *  2. **Grouped settings matrix** — rows under bold section headers, each row a
- *     44pt target with a 24pt leading glyph, a title, and either a chevron (nav)
- *     or a live native `Switch` (preference).
- *  3. **Destructive action slot** — "Sign out" as the final scroll child, in the
- *     Semantic Danger Red token.
+ *  1. **Identity card** — a 56pt `primarySoft` monogram beside the name (with a
+ *     "Verified" pill), the email and the role.
+ *  2. **Grouped settings** — Personal Details, Preferences and Session, each a
+ *     labelled card of [`SettingsRow`](src/features/settings/components/SettingsRow.tsx:1)s.
+ *  3. **Sign-out footnote** — the consequence of "Sign out everywhere".
+ *
+ * ## The safe-area fix
+ *
+ * The previous build nested a `ScrollView` inside `ScreenContainer`'s own scroller.
+ * Two vertical scrollers in a column have no defined height contract, and the inner
+ * one could paint its first child (the identity card) up under the status bar — the
+ * "name overlapping the clock" defect. This screen now renders **one** scroller:
+ * `ScreenContainer` is `scrollable={false}`, the `AppHeader` is a flow sibling that
+ * absorbs the top inset, and the single `ScrollView` below it starts at the header's
+ * lower edge. `contentInsetAdjustmentBehavior="automatic"` keeps the content clear of
+ * any system chrome, and the bottom inset is added so the last row clears the tab bar.
  *
  * Why there is no avatar upload: `POST /auth/profile` accepts `name`/`email` only
  * and the avatar endpoint rejects the employee role (backend gap G4). Rendering an
- * avatar *control* here would be a dead end that photographs a missing capability
- * as a working one, so the header shows identity and nothing more. This is the
- * same stance taken in Shift Detail (no clock-in) and Leave Detail (read-only).
- *
- * The initials fallback is not decoration: a large empty ring where a face should
- * be reads as a failed image load, so the circle always paints something.
+ * avatar *control* here would photograph a missing capability as a working one.
  */
 export function AccountScreen({ navigation }: Props): React.JSX.Element {
     const theme = useTheme();
+    const insets = useSafeAreaInsets();
     const session = useSession();
     const cachedUser = useSessionStore(state => state.user);
     const user = session.data ?? cachedUser;
@@ -65,31 +76,20 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
 
     const initials = useMemo(() => deriveInitials(user?.name), [user?.name]);
 
-    /**
-     * Preferences are device-local state, so the Switch reflects the persisted
-     * store rather than anything from the API.
-     */
-    const darkMode = usePreferencesStore(state => state.appearance === 'dark');
-    const setAppearance = usePreferencesStore(state => state.setAppearance);
+    // The appearance choice is owned by the ThemeProvider (persisted under
+    // `@app/color-scheme`), not the preferences store, so the switch and the
+    // rendered theme cannot disagree.
+    const { colorScheme, setColorScheme, isHydrated: themeHydrated } = useColorSchemePreference();
+    const darkMode = colorScheme === 'dark';
     const pushEnabled = usePreferencesStore(state => state.pushEnabled);
     const setPushEnabled = usePreferencesStore(state => state.setPushEnabled);
     const preferencesHydrated = usePreferencesStore(state => state.isHydrated);
 
-    /**
-     * Dark Mode as a boolean.
-     *
-     * `appearance === 'dark'` is treated as "on" and anything else as "off", rather
-     * than reading the tri-state `system` as a third position. A three-state
-     * control needs three labelled stops, and a bare Switch cannot express them —
-     * so a user on `system` who flips it on gets an explicit `dark`, and flipping
-     * it off gets an explicit `light`. The richer system/light/dark choice still
-     * lives on the Preferences screen, which is the pair of rows directly below.
-     */
     const handleToggleDarkMode = useCallback(
         (enabled: boolean) => {
-            void setAppearance(enabled ? 'dark' : 'light');
+            setColorScheme(enabled ? 'dark' : 'light');
         },
-        [setAppearance],
+        [setColorScheme],
     );
 
     const handleTogglePush = useCallback(
@@ -99,32 +99,12 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
         [setPushEnabled],
     );
 
-    /**
-     * Which confirmation sheet is open, if any.
-     *
-     * A single nullable discriminator rather than two booleans: two flags can
-     * both be true, and the screen would then have to decide which sheet wins.
-     * One value makes that state unrepresentable.
-     */
     const [confirming, setConfirming] = useState<'signOut' | 'signOutEverywhere' | null>(null);
 
-    const confirmSignOut = useCallback(() => {
-        setConfirming('signOut');
-    }, []);
+    const confirmSignOut = useCallback(() => setConfirming('signOut'), []);
+    const confirmSignOutEverywhere = useCallback(() => setConfirming('signOutEverywhere'), []);
+    const closeConfirmation = useCallback(() => setConfirming(null), []);
 
-    const confirmSignOutEverywhere = useCallback(() => {
-        setConfirming('signOutEverywhere');
-    }, []);
-
-    const closeConfirmation = useCallback(() => {
-        setConfirming(null);
-    }, []);
-
-    /**
-     * Actions are built from the *same* state that opened the sheet, so the
-     * confirm button's `loading` flag tracks the in-flight mutation and the
-     * sheet cannot be dismissed mid-request by a double tap.
-     */
     const signOutSheetActions = useMemo<BottomSheetAction[]>(() => {
         if (confirming === 'signOut') {
             return [
@@ -135,11 +115,7 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                     onPress: () => signOut.mutate(undefined),
                     testID: 'account-confirm-sign-out',
                 },
-                {
-                    label: 'Cancel',
-                    variant: 'secondary',
-                    onPress: closeConfirmation,
-                },
+                { label: 'Cancel', variant: 'secondary', onPress: closeConfirmation },
             ];
         }
 
@@ -151,56 +127,41 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                 onPress: () => signOutEverywhere.mutate(),
                 testID: 'account-confirm-sign-out-everywhere',
             },
-            {
-                label: 'Cancel',
-                variant: 'secondary',
-                onPress: closeConfirmation,
-            },
+            { label: 'Cancel', variant: 'secondary', onPress: closeConfirmation },
         ];
     }, [confirming, closeConfirmation, signOut, signOutEverywhere]);
 
     return (
-        <ScreenContainer hasHeader>
+        <ScreenContainer hasHeader scrollable={false} withGutter={false}>
             <AppHeader title="Account" subtitle="Your profile and settings." />
 
             <ScrollView
-                contentContainerStyle={[styles.content, { gap: theme.spacing.md }]}
-                testID="account-scroll">
-                {/* ---------- 1. Profile Identity Header ---------- */}
-                {/*
-                 * The avatar plate is brand-tinted rather than a grey ring: at 64pt
-                 * an untinted circle with initials reads as a failed image load,
-                 * whereas `primarySoft` on `primaryBorder` reads as a deliberate
-                 * monogram. The verification chip sits beside the name rather than
-                 * as a separate notice card, because "is this me and is it trusted"
-                 * is one glance, not two.
-                 */}
-                <AppCard testID="account-identity">
-                    <View style={[styles.identity, { gap: spacing.md }]}>
+                testID="account-scroll"
+                // Keeps the content clear of any system chrome the OS insets for.
+                contentInsetAdjustmentBehavior="automatic"
+                contentContainerStyle={[
+                    styles.content,
+                    // The tab bar floats over the scroller, so the last row reserves
+                    // its lane plus the home-indicator inset.
+                    { paddingBottom: insets.bottom + 96 },
+                ]}>
+                {/* ---------- 1. Identity card ---------- */}
+                <AppCard testID="account-identity" style={styles.identityCard}>
+                    <View style={styles.identity}>
                         <View
-                            style={[
-                                styles.avatar,
-                                {
-                                    backgroundColor: theme.colors.primarySoft,
-                                    borderColor: theme.colors.primaryBorder,
-                                },
-                            ]}
+                            style={[styles.avatar, { backgroundColor: theme.colors.primarySoft }]}
                             accessibilityElementsHidden
                             importantForAccessibility="no-hide-descendants">
-                            <AppText variant="headerMedium" style={{ color: theme.colors.primary }}>
+                            <AppText style={[styles.initials, { color: theme.colors.primary }]}>
                                 {initials}
                             </AppText>
                         </View>
 
-                        {/*
-                         * The text block is the flexed centre and carries `minWidth: 0`
-                         * so a long corporate email truncates instead of nudging the
-                         * avatar off its fixed left edge.
-                         */}
                         <View style={styles.identityText}>
-                            <View style={[styles.identityNameRow, { gap: spacing.xs }]}>
+                            <View style={styles.identityNameRow}>
                                 <AppText
-                                    variant="subtitle"
+                                    variant="heading"
+                                    color="text"
                                     numberOfLines={1}
                                     style={styles.identityName}>
                                     {user?.name ?? 'Signed in'}
@@ -209,26 +170,21 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                                     <View
                                         style={[
                                             styles.verifiedChip,
-                                            {
-                                                backgroundColor: theme.colors.successSoft,
-                                                borderRadius: radiusRoles.pill.full,
-                                            },
+                                            { backgroundColor: theme.colors.successSoft },
                                         ]}
                                         testID="account-verified-badge">
-                                        <AppText
-                                            variant="label"
-                                            style={{ color: theme.colors.successStrong }}>
+                                        <AppText variant="micro" style={{ color: theme.colors.success }}>
                                             Verified
                                         </AppText>
                                     </View>
                                 ) : null}
                             </View>
-                            <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+                            <AppText variant="body" color="textSecondary" numberOfLines={1}>
                                 {user?.email ?? ''}
                             </AppText>
                             {user !== null && user !== undefined ? (
                                 <AppText
-                                    variant="label"
+                                    variant="caption"
                                     color="textMuted"
                                     numberOfLines={2}
                                     testID="account-roles">
@@ -240,9 +196,9 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                 </AppCard>
 
                 {!isVerified && user !== null && user !== undefined ? (
-                    <AppCard testID="account-unverified">
-                        <View style={{ gap: spacing.xs }}>
-                            <View style={[styles.noticeRow, { gap: spacing.xs }]}>
+                    <AppCard testID="account-unverified" style={styles.identityCard}>
+                        <View style={{ gap: theme.spacing.xs }}>
+                            <View style={styles.noticeRow}>
                                 <AppIcon
                                     icon={AlertTriangleGlyph}
                                     size="small"
@@ -269,16 +225,17 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
 
                 {/* ---------- 2a. Personal Details ---------- */}
                 <SettingsGroup title="Personal Details">
-                    <AppListItem
-                        label="Name and email"
-                        value="Personal details"
+                    <SettingsRow
                         icon={UserGlyph}
+                        title="Name and email"
+                        subtitle="Personal details"
                         onPress={() => navigation.navigate('Profile')}
                     />
-                    <AppListItem
-                        label="Password"
-                        value="Change password"
+
+                    <SettingsRow
                         icon={SlidersGlyph}
+                        title="Password"
+                        subtitle="Change password"
                         isLast
                         onPress={() => navigation.navigate('ChangePassword')}
                     />
@@ -287,43 +244,36 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                 {/* ---------- 2b. Preferences ---------- */}
                 <SettingsGroup
                     title="Preferences"
-                    note={
-                        preferencesHydrated
-                            ? undefined
-                            : 'Restoring your saved preferences…'
+                    footnote={
+                        preferencesHydrated ? undefined : 'Restoring your saved preferences…'
                     }>
-                    <AppListItem
-                        label="Dark Mode"
+                    <SettingsRow
                         icon={SunMoonGlyph}
-                        /*
-                         * A Switch row is not a navigation row: it has no `onPress`,
-                         * so `AppListItem` renders a `View` rather than a `Pressable`
-                         * and the Switch itself becomes the only target. Attaching
-                         * `onPress` as well would give the row and the switch two
-                         * different ideas of the current value.
-                         */
+                        title="Dark Mode"
+                        rightElement="switch"
                         trailing={
                             <Switch
                                 value={darkMode}
-                                // Gated on hydration so the Switch never paints the
-                                // default (light) and then flips once AsyncStorage
-                                // reports back — a visible lie on every cold start.
-                                disabled={!preferencesHydrated}
+                                disabled={!themeHydrated}
                                 onValueChange={handleToggleDarkMode}
                                 trackColor={{
-                                    false: theme.colors.divider,
-                                    true: theme.colors.primary,
+                                    // Off track is the spec's `borderHairline`;
+                                    // on track is `success`, matching the
+                                    // availability switch's treatment.
+                                    false: theme.colors.borderHairline,
+                                    true: theme.colors.success,
                                 }}
-                                thumbColor={theme.colors.surface}
+                                thumbColor="#FFFFFF"
                                 accessibilityLabel="Dark Mode"
                                 testID="account-dark-mode"
                             />
                         }
                     />
-                    <AppListItem
-                        label="Shift notifications"
-                        value={pushEnabled ? 'On' : 'Off'}
+                    <SettingsRow
                         icon={BellGlyph}
+                        title="Shift notifications"
+                        subtitle={pushEnabled ? 'On' : 'Off'}
+                        rightElement="switch"
                         trailing={
                             <Switch
                                 value={pushEnabled}
@@ -339,19 +289,19 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                             />
                         }
                     />
-                    <AppListItem
-                        label="More preferences"
-                        value="Roster view, appearance"
+                    <SettingsRow
                         icon={SlidersGlyph}
+                        title="More preferences"
+                        subtitle="Roster view, appearance"
                         isLast
                         onPress={() => navigation.navigate('Preferences')}
                     />
                 </SettingsGroup>
 
                 {user?.company_access.is_locked ? (
-                    <AppCard testID="account-company-locked">
-                        <View style={{ gap: spacing.xs }}>
-                            <View style={[styles.noticeRow, { gap: spacing.xs }]}>
+                    <AppCard testID="account-company-locked" style={styles.identityCard}>
+                        <View style={{ gap: theme.spacing.xs }}>
+                            <View style={styles.noticeRow}>
                                 <AppIcon icon={ShieldAlertGlyph} size="small" color="danger" />
                                 <AppText variant="caption" color="danger" style={styles.noticeText}>
                                     Company access is locked
@@ -365,39 +315,28 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
                     </AppCard>
                 ) : null}
 
-                {/* ---------- 3. Destructive Action Slot ---------- */}
-                <SettingsGroup title="Session">
-                    <AppListItem
-                        label="Sign out"
+                {/* ---------- 3. Session ---------- */}
+                <SettingsGroup
+                    title="Session"
+                    footnote="Sign out everywhere revokes access on all devices. Use it if you have lost a device or shared your password.">
+                    <SettingsRow
                         icon={SignOutGlyph}
-                        iconColor="danger"
-                        destructive
-                        trailing={null}
+                        title="Sign out"
+                        variant="danger"
+                        rightElement="none"
                         onPress={confirmSignOut}
                     />
-                    <AppListItem
-                        label="Sign out everywhere"
+                    <SettingsRow
                         icon={SignOutGlyph}
-                        iconColor="danger"
-                        destructive
-                        trailing={null}
+                        title="Sign out everywhere"
+                        variant="danger"
+                        rightElement="none"
                         isLast
                         onPress={confirmSignOutEverywhere}
                     />
                 </SettingsGroup>
-
-                <AppText variant="caption" color="textMuted" testID="account-signout-note">
-                    Sign out everywhere revokes access on all devices. Use it if you have lost a
-                    device or shared your password.
-                </AppText>
             </ScrollView>
 
-            {/**
-             * One sheet serves both destructive actions. It is deliberately
-             * mounted *outside* the ScrollView: a modal does not participate in
-             * the scroll content's layout, and keeping it a sibling of the scroll
-             * means opening it cannot change the scroll offset.
-             */}
             <BottomSheet
                 visible={confirming !== null}
                 onClose={closeConfirmation}
@@ -416,50 +355,11 @@ export function AccountScreen({ navigation }: Props): React.JSX.Element {
     );
 }
 
-/* ------------------------------------------------------------------ *
- * Local layout pieces
- * ------------------------------------------------------------------ */
-
-type SettingsGroupProps = {
-    title: string;
-    note?: string;
-    children: React.ReactNode;
-};
-
-/**
- * A section header above one `padded={false}` card of rows.
- *
- * The label is set as a small-caps **overline** rather than a `bodyStrong` line:
- * at 12pt with wide tracking it reads as a group name stamped above the card,
- * which is what makes a settings list scan as sections instead of one long
- * column. A body-sized grey line competes with the rows it labels.
- */
-function SettingsGroup({ title, note, children }: SettingsGroupProps): React.JSX.Element {
-    const theme = useTheme();
-
-    return (
-        <View style={{ gap: theme.spacing.sm }}>
-            <AppText variant="overline" color="textMuted" style={styles.groupTitle}>
-                {title}
-            </AppText>
-
-            <AppCard padded={false}>{children}</AppCard>
-
-            {note !== undefined ? (
-                <AppText variant="caption" color="textMuted">
-                    {note}
-                </AppText>
-            ) : null}
-        </View>
-    );
-}
-
 /**
  * Up to two initials from a display name.
  *
  * Falls back to a bullet rather than an empty string so the circle is never blank,
- * and handles the single-word case (many corporate names are just a first name)
- * without producing a stray trailing space.
+ * and handles the single-word case without producing a stray trailing space.
  */
 function deriveInitials(name: string | null | undefined): string {
     if (name === null || name === undefined) {
@@ -480,58 +380,57 @@ function deriveInitials(name: string | null | undefined): string {
 
 const styles = StyleSheet.create({
     content: {
-        // Mirrors screenGutter so the last row is not flush against the tab bar.
-        paddingBottom: spacing.xxl,
+        paddingTop: 16,
+    },
+    identityCard: {
+        marginHorizontal: 20,
     },
     identity: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 16,
     },
     avatar: {
-        width: avatarSizes.profile,
-        height: avatarSizes.profile,
-        borderRadius: radius.full,
-        borderWidth: borderWidths.hairline,
+        width: AVATAR_SIZE,
+        height: AVATAR_SIZE,
+        borderRadius: AVATAR_SIZE / 2,
         alignItems: 'center',
         justifyContent: 'center',
-        // Fixed so the row height is predictable regardless of glyph metrics.
         flexGrow: 0,
         flexShrink: 0,
     },
+    initials: {
+        fontSize: INITIALS_SIZE,
+        lineHeight: INITIALS_SIZE + 4,
+        fontWeight: '700',
+    },
     identityText: {
         flex: 1,
-        // Phase 6 spec §0.3: truncate rather than displace the avatar.
+        // Truncate rather than displace the avatar.
         minWidth: 0,
-        gap: spacing.xxs,
+        gap: 2,
     },
     identityNameRow: {
         alignItems: 'center',
         flexDirection: 'row',
+        gap: 8,
     },
-    /**
-     * `flexShrink: 1` + `minWidth: 0` on the name: the name yields to the chip
-     * rather than the chip being pushed off the card by a long legal name.
-     */
     identityName: {
         flexShrink: 1,
         minWidth: 0,
     },
     verifiedChip: {
-        paddingHorizontal: spacing.xs,
-        paddingVertical: spacing.xxs,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 999,
     },
-    /** A leading glyph beside a status sentence, aligned to its first line. */
     noticeRow: {
         alignItems: 'center',
         flexDirection: 'row',
+        gap: 8,
     },
     noticeText: {
         flex: 1,
         minWidth: 0,
-    },
-    groupTitle: {
-        // The card below is inset by nothing, so the header lines up with the row
-        // labels' left edge only if it shares their horizontal padding.
-        paddingHorizontal: spacing.xxs,
     },
 });

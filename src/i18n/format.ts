@@ -149,12 +149,14 @@ export function formatRelativeTimestamp(timestampMs: number, fallback: () => str
 /**
  * The hint shown under an availability time input.
  *
- * Lives here rather than inline so the *input* format and the *display* format are
- * described by the same module — the defect this file fixes was two conventions for
- * one value.
+ * The field always accepts 24-hour `HH:MM` — that is the API's interchange format
+ * and the only thing the input parses — so the hint is a single, locale-independent
+ * string. It previously branched on the locale's clock cycle and could therefore
+ * describe a 12-hour format the input would reject; that variant is gone.
+ *
+ * The *display* of a saved value still follows the locale (see
+ * [`formatClockTime`](src/i18n/format.ts:78)); only the input hint is fixed.
  */
 export function clockInputHint(): string {
-    return getHourCycle() === 'h23'
-        ? translate('availability.timeFormat24h')
-        : translate('availability.timeFormat12h');
+    return translate('availability.timeFormat');
 }

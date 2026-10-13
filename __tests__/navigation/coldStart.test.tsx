@@ -38,7 +38,7 @@ describe('Cold start', () => {
 
         // The first paint is the branded splash: at this point the app does not know
         // whether it is signed in, and the overlay is what stops it deciding.
-        expect(screen.getByLabelText('Starting Staff Scheduler')).toBeTruthy();
+        expect(screen.getByLabelText('Starting Rosta')).toBeTruthy();
 
         await harness.waitForLogin();
 

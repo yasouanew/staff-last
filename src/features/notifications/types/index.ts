@@ -24,6 +24,15 @@ export type NotificationListParams = {
     filter?: NotificationFilter;
     page?: number;
     per_page?: number;
+    /**
+     * Reconciliation cursor: only return notifications created strictly after this
+     * ISO-8601 instant.
+     *
+     * Used by the reconnect sync to fetch the gap that accumulated while the device
+     * was offline, instead of re-downloading the whole feed. The backend treats an
+     * absent value as "from the beginning", which is what a first-ever sync wants.
+     */
+    since?: string;
 };
 
 /**

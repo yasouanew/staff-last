@@ -120,7 +120,8 @@ export function AppCard({
     /**
      * `plain` describes its edge with nothing at all, `glass` with the lighter
      * glass border (the tint already provides separation), and an elevated card in
-     * dark mode with the ring — see the class doc.
+     * dark mode with the 2026 spec's `borderHairline` — because dark mode zeroes
+     * every shadow, the border *is* the elevation cue.
      */
     const borderColor = (() => {
         if (isPlain) {
@@ -129,7 +130,7 @@ export function AppCard({
         if (isGlass) {
             return theme.colors.glassBorder;
         }
-        return theme.isDark ? theme.darkElevation.ring : theme.colors.hairline;
+        return theme.isDark ? theme.colors.borderHairline : theme.colors.hairline;
     })();
 
     /** 0 = resting, 1 = fully pressed. Drives scale and tint together. */
@@ -147,8 +148,10 @@ export function AppCard({
         press.value = reduceMotion ? to : withSpring(to, springs.snappy);
     };
 
-    const pressInk = theme.isDark ? '#FFFFFF' : '#000000';
-
+    // Press ink. Light mode darkens toward the ink tier; dark mode must
+    // *lighten*, or the tint would be invisible against an already-dark fill.
+    const pressInk = theme.isDark ? theme.colors.textInverse : theme.colors.text;
+    
     const surfaceStyle: ViewStyle = {
         borderRadius,
         // Always clip: children must never paint outside the rounded rect.

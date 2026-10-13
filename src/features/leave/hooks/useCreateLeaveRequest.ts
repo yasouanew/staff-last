@@ -4,7 +4,8 @@ import type { AppError } from '../../../types/appError';
 import { requireValidatedSession } from '../../auth/store/sessionStore';
 import { queryKeys } from '../../../utils/queryKeys';
 import { leaveApi } from '../api';
-import type { CreateLeaveRequestPayload, LeaveRequest } from '../types';
+import type { CreateLeaveRequestPayload } from '../types';
+import type { CreatedLeaveRequest } from '../validation/apiSchemas';
 
 /**
  * `POST /leave-requests`.
@@ -15,13 +16,13 @@ import type { CreateLeaveRequestPayload, LeaveRequest } from '../types';
  * the list refetch keeps the client out of the business of predicting the result.
  */
 export function useCreateLeaveRequest(): UseMutationResult<
-    LeaveRequest,
+    CreatedLeaveRequest,
     AppError,
     CreateLeaveRequestPayload
 > {
     const queryClient = useQueryClient();
 
-    return useMutation<LeaveRequest, AppError, CreateLeaveRequestPayload>({
+    return useMutation<CreatedLeaveRequest, AppError, CreateLeaveRequestPayload>({
         mutationFn: payload => {
             // Submitting leave is a state-changing, hard-to-undo action: require a
             // server-validated session so a stale cached user (changed permissions,

@@ -1,6 +1,7 @@
 import { type TextStyle } from 'react-native';
 
 import { lightColors } from './colors';
+import { typographyTokens } from './tokens';
 
 /**
  * Typography tokens.
@@ -70,7 +71,14 @@ export const fontSize = {
     xl: 20,
     xxl: 24,
     xxxl: 30,
-    display: 34,
+    /** Spec `display` — 28. */
+    display: typographyTokens.display.fontSize,
+    /** Spec `title` — 22. */
+    title: typographyTokens.title.fontSize,
+    /** Spec `heading` — 17. */
+    heading: typographyTokens.heading.fontSize,
+    /** Spec `micro` — 11. */
+    micro: typographyTokens.micro.fontSize,
 } as const;
 
 /** Line heights, paired 1:1 with `fontSize` keys. Roughly 1.35–1.5x the font size. */
@@ -82,7 +90,14 @@ export const lineHeight = {
     xl: 28,
     xxl: 32,
     xxxl: 38,
-    display: 42,
+    /** Spec `display` — 34. */
+    display: typographyTokens.display.lineHeight,
+    /** Spec `title` — 28. */
+    title: typographyTokens.title.lineHeight,
+    /** Spec `heading` — 22. */
+    heading: typographyTokens.heading.lineHeight,
+    /** Spec `micro` — 14. */
+    micro: typographyTokens.micro.lineHeight,
 } as const;
 
 /**
@@ -114,14 +129,17 @@ export const letterSpacing = {
  */
 export const typeWeights = {
     display: fontWeight.bold,
+    title: fontWeight.bold,
+    heading: fontWeight.semibold,
     headerLarge: fontWeight.bold,
     headerMedium: fontWeight.semibold,
     subtitle: fontWeight.semibold,
     body: fontWeight.regular,
-    bodyStrong: fontWeight.medium,
-    caption: fontWeight.regular,
+    bodyStrong: fontWeight.semibold,
+    caption: fontWeight.medium,
     label: fontWeight.medium,
     overline: fontWeight.semibold,
+    micro: fontWeight.semibold,
 } as const;
 
 /* ------------------------------------------------------------------ *
@@ -202,6 +220,17 @@ export const textVariants = {
     } satisfies TextStyle,
 
     /**
+     * Heading — promoted section headings and modal titles. The spec's 17/22
+     * semibold tier, sitting between `title` and `body`.
+     */
+    heading: {
+        ...base,
+        fontSize: fontSize.heading,
+        lineHeight: lineHeight.heading,
+        fontWeight: typeWeights.heading,
+    } satisfies TextStyle,
+
+    /**
      * Caption — supporting copy: row secondary lines, helper text, field hints.
      */
     caption: {
@@ -210,6 +239,20 @@ export const textVariants = {
         lineHeight: lineHeight.sm,
         fontWeight: typeWeights.caption,
         color: lightColors.textSecondary,
+    } satisfies TextStyle,
+
+    /**
+     * Micro — the smallest tier: status-pill labels, dense metadata. Uppercase
+     * with positive tracking, per the spec (11/14 w600, letterSpacing 0.8).
+     */
+    micro: {
+        ...base,
+        fontSize: fontSize.micro,
+        lineHeight: lineHeight.micro,
+        fontWeight: typeWeights.micro,
+        letterSpacing: typographyTokens.micro.letterSpacing,
+        textTransform: 'uppercase',
+        color: lightColors.textMuted,
     } satisfies TextStyle,
 
     /**
@@ -260,16 +303,13 @@ export const textVariants = {
     } satisfies TextStyle,
 
     /**
-     * Title — **legacy alias** of `headerMedium`, kept inside the scale (rather
-     * than in a side table) so the `TextVariant` union still accepts
-     * `variant="title"` at every existing call site. New code should use
-     * `headerMedium`; this entry can be deleted once no screen references it.
+     * Title — the spec's 22/28 bold tier. Screen titles in a navigation header.
      */
     title: {
         ...base,
-        fontSize: fontSize.xl,
-        lineHeight: lineHeight.xl,
-        fontWeight: typeWeights.headerMedium,
+        fontSize: fontSize.title,
+        lineHeight: lineHeight.title,
+        fontWeight: typeWeights.title,
         letterSpacing: letterSpacing.tight,
     } satisfies TextStyle,
 } as const;

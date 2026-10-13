@@ -3,8 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View, type ListRenderItemInfo } from 'react-native';
 
 import { AppHeader } from '../../../components/AppHeader';
+import { AppIcon } from '../../../components/AppIcon';
+import { CalendarOffGlyph, SunGlyph } from '../../../components/AppIcon/glyphs';
 import { AppText } from '../../../components/AppText';
-import { EmptyState } from '../../../components/EmptyState';
 import { ErrorView } from '../../../components/ErrorView';
 import { FilterChip } from '../../../components/FilterChip';
 import { FloatingActionButton } from '../../../components/FloatingActionButton';
@@ -12,15 +13,12 @@ import { SkeletonList } from '../../../components/Skeleton';
 import { ScreenContainer } from '../../../components/ScreenContainer';
 import { StatusBadge } from '../../../components/StatusBadge';
 import type { LeaveStackParamList } from '../../../navigation/types';
-import { scaleRowHeight, useRowScale } from '../../../hooks';
-import { borderWidths, componentRadius, useTheme } from '../../../theme';
-import type { Colors } from '../../../theme/colors';
-import { spacing } from '../../../theme/spacing';
+import { useTheme } from '../../../theme/useTheme';
 import type { LeaveRequestStatus } from '../../../types/api';
-import { formatDate, formatRelative } from '../../../utils/date';
+import { formatDate } from '../../../utils/date';
 import { useLeaveRequests } from '../hooks';
 import type { LeaveRequest } from '../types';
-import { formatTotalDays, sessionLabel } from '../utils/leaveRequest';
+import { dayPartLabel, decisionDate, formatLeaveRange, formatTotalDays } from '../utils/leaveRequest';
 
 type Props = NativeStackScreenProps<LeaveStackParamList, 'LeaveList'>;
 
@@ -40,37 +38,8 @@ const FILTERS: readonly { key: FilterKey; label: string }[] = [
 
 const PAGE_SIZE = 20;
 
-/**
- * Accent-strip colour by status.
- *
- * The strip is the card's second, non-textual encoding of status: it is legible at a
- * glance while scrolling, before the `StatusBadge` label is read. `*Strong` rather
- * than the soft tone because the stripe is a 4pt sliver — a soft tint on a 4pt sliver
- * against white reads as "no stripe at all".
- *
- * Keyed by a `Record` over the status union so adding a status to the API without
- * adding it here fails the build rather than silently rendering an unaccented card.
- */
-const STATUS_ACCENT: Record<LeaveRequestStatus, keyof Colors> = {
-    approved: 'successStrong',
-    pending: 'warningStrong',
-    rejected: 'dangerStrong',
-};
-
-/**
- * Fixed row height, in points.
- *
- * `LeaveRow` clamps its content so this stays true: the widest card is position line
- * + date/days line + sessions line + a two-line reason clamped to `numberOfLines={2}`,
- * which at the `caption`/`bodyStrong` metrics tops out around 88pt including padding
- * and the badge. 96 gives that a margin and still divides evenly by 8 (the grid unit).
- *
- * The card's own `marginBottom` is *not* part of this figure — `ItemSeparatorComponent`
- * and `contentContainerStyle.gap` sit outside the item, and `getItemLayout` measures
- * the item only. Putting the gap inside this number instead would make the list drift
- * by one gap per screen.
- */
-export const LEAVE_ROW_HEIGHT = 96;
+/** The spec's 14pt sun prefix on the day-part row. */
+const DAY_PART_ICON_SIZE = 14;
 
 /**
  * My Leave (spec Screen 8).
@@ -82,15 +51,18 @@ export const LEAVE_ROW_HEIGHT = 96;
  * There is no balance endpoint — only `total_days` per request is shown, never an
  * authoritative balance (spec Screen 8 §5). There is no cancel action (gap G6), which
  * is why nothing in this feed offers one.
+ *
+ * ## Card shape
+ *
+ * Each request is a flat card (no status accent strip — status is carried by the
+ * shared [`StatusBadge`](src/components/StatusBadge/StatusBadge.tsx:1) alone) with
+ * three rows: type + status, the full date range + decision date, and the day-part.
+ * The date range is collapsed by
+ * [`formatLeaveRange`](src/features/leave/utils/leaveRequest.ts:1) so a single-day
+ * request no longer renders the same date twice and truncates.
  */
 export function LeaveListScreen({ navigation }: Props): React.JSX.Element {
     const theme = useTheme();
-    /*
-     * The row height is a `getItemLayout` contract, so it is scaled by the same
-     * factor [`LeaveRow`](#leaverow) applies — see [`useRowScale`](src/hooks/useRowScale.ts:1).
-     */
-    const scale = useRowScale();
-    const rowBlock = scaleRowHeight(LEAVE_ROW_HEIGHT, scale) + theme.spacing.sm;
     const [status, setStatus] = useState<FilterKey>('all');
     const [page, setPage] = useState(1);
     const [allItems, setAllItems] = useState<LeaveRequest[]>([]);
@@ -105,6 +77,23 @@ export function LeaveListScreen({ navigation }: Props): React.JSX.Element {
     );
     const query = useLeaveRequests(listParams);
     const pendingQuery = useLeaveRequests({ status: 'pending', per_page: 1, page: 1 });
+
+    // Refetch when the screen regains focus — e.g. after the create modal closes —
+    // so a newly submitted request appears without a manual pull-to-refresh. The
+    // initial focus is skipped because the mount already fetches; only a *return*
+    // to the screen needs a refresh.
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            if (query.isPending) {
+                return;
+            }
+
+            void query.refetch();
+            void pendingQuery.refetch();
+        });
+
+        return unsubscribe;
+    }, [navigation, query.isPending, query.refetch, pendingQuery.refetch]);
 
     // Reset accumulation when the filter changes.
     useEffect(() => {
@@ -158,31 +147,13 @@ export function LeaveListScreen({ navigation }: Props): React.JSX.Element {
         navigation.navigate('CreateLeaveRequest');
     }, [navigation]);
 
-    /*
-     * The chip row is a sibling of the feed rather than its `ListHeaderComponent`.
-     *
-     * Inside the header it would unmount once the user scrolled past it, taking the
-     * selected filter off screen while its results were still on screen — the filter
-     * would become invisible but still applied, which is the single most confusing
-     * state a filtered list can be in. As a sibling it also has to be wrapped by the
-     * screen rather than the list, so it never inherits the list's scroll offset.
-     */
-    const header = (
-        <AppHeader
-            title="Leave"
-            subtitle={
-                pendingTotal > 0
-                    ? `${pendingTotal} awaiting a decision`
-                    : 'Your leave requests.'
-            }
-        />
-    );
+    const header = <AppHeader title="Leave" subtitle="Your leave requests." />;
 
     if (query.isPending && page === 1 && allItems.length === 0) {
         return (
             <ScreenContainer hasHeader>
                 {header}
-                {/* Card-shaped placeholders matching `LeaveRow`'s footprint, so the
+                {/* Card-shaped placeholders matching the row footprint, so the
                     first paint and the loaded list share one geometry. */}
                 <SkeletonList count={3} />
             </ScreenContainer>
@@ -222,16 +193,6 @@ export function LeaveListScreen({ navigation }: Props): React.JSX.Element {
                     onRefresh={handleRefresh}
                     onEndReached={handleEndReached}
                     onEndReachedThreshold={0.5}
-                    /*
-                     * Every row is a fixed height, so the list can compute offsets
-                     * without measuring. This is what keeps `onEndReached` and the
-                     * scrollbar honest during a fast fling on a long feed.
-                     */
-                    getItemLayout={(_data, index) => ({
-                        length: rowBlock,
-                        offset: rowBlock * index,
-                        index,
-                    })}
                     initialNumToRender={8}
                     maxToRenderPerBatch={8}
                     windowSize={7}
@@ -241,18 +202,7 @@ export function LeaveListScreen({ navigation }: Props): React.JSX.Element {
                     renderItem={({ item }: ListRenderItemInfo<LeaveRequest>) => (
                         <LeaveRow request={item} onPress={handleOpenRequest} />
                     )}
-                    ListEmptyComponent={
-                        <EmptyState
-                            title="No leave requests"
-                            description={
-                                status === 'all'
-                                    ? 'You have not submitted any leave requests yet. Tap + to request leave.'
-                                    : `You have no ${status} leave requests.`
-                            }
-                            actionLabel="Request leave"
-                            onAction={handleCreate}
-                        />
-                    }
+                    ListEmptyComponent={<LeaveEmptyState filter={status} />}
                     ListFooterComponent={
                         // Appending a page is still content loading, so it gets the
                         // same card skeleton rather than dropping back to a spinner.
@@ -287,15 +237,13 @@ function FilterChipRow({
     onSelect: (key: FilterKey) => void;
     pendingTotal: number;
 }): React.JSX.Element {
-    const theme = useTheme();
-
     const counts = useMemo<Partial<Record<FilterKey, number>>>(
         () => ({ pending: pendingTotal }),
         [pendingTotal],
     );
 
     return (
-        <View style={{ flexGrow: 0 }}>
+        <View style={styles.chipRow}>
             <FlatList
                 data={FILTERS}
                 horizontal
@@ -304,9 +252,8 @@ function FilterChipRow({
                 style={styles.chipStrip}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{
-                    paddingHorizontal: theme.screenGutter,
-                    paddingVertical: theme.spacing.xs,
-                    gap: theme.spacing.xs,
+                    paddingHorizontal: 20,
+                    gap: 8,
                 }}
                 // Four short labels; there is nothing to defer.
                 initialNumToRender={FILTERS.length}
@@ -327,11 +274,10 @@ function FilterChipRow({
 /**
  * One leave request.
  *
- * The accent strip is a sibling of the card body inside a clipping wrapper, not a
- * `borderLeftWidth` on the card. A left border follows the rounded corner and so
- * tapers into nothing at the top-left and bottom-left radii; a strip drawn across the
- * full height and then clipped by the wrapper's `overflow: 'hidden'` keeps a constant
- * 4pt width while still stopping at the corner.
+ * A flat card — the previous 4pt status accent strip is gone. Status is carried by
+ * the shared `StatusBadge` alone, which is the same pill every other surface uses,
+ * so a leave card and a shift card can no longer disagree about what "pending"
+ * looks like.
  */
 function LeaveRow({
     request,
@@ -341,75 +287,81 @@ function LeaveRow({
     onPress: (leaveRequestId: number) => void;
 }): React.JSX.Element {
     const theme = useTheme();
-    // Matches the scaled `getItemLayout` block on the feed (see the screen body).
-    const scale = useRowScale();
-    const cardHeight = scaleRowHeight(LEAVE_ROW_HEIGHT, scale);
-    const dates = `${formatDate(request.start_date)} – ${formatDate(request.end_date)}`;
-    const sessions = sessionLabel(
-        request.start_date,
-        request.end_date,
-        request.start_session,
-        request.end_session,
-    );
-    const attachmentCount = request.attachments?.length ?? 0;
-    const accent = STATUS_ACCENT[request.status];
+    const range = formatLeaveRange(request.start_date, request.end_date);
+    const dayPart = dayPartLabel(request.start_session, request.end_session);
+    const decided = decisionDate(request);
+    const decisionLabel =
+        decided === null
+            ? null
+            : `${request.status === 'approved' ? 'Approved' : 'Rejected'} ${formatDate(decided)}`;
 
     return (
-        <View
-            style={[
-                styles.cardShell,
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${request.leave_type?.name ?? 'Leave'}, ${range}, ${dayPart}, ${request.status}, ${formatTotalDays(request.total_days)}`}
+            testID={`leave-card-${request.id}`}
+            onPress={() => onPress(request.id)}
+            style={({ pressed }) => [
+                styles.card,
+                theme.tokens.shadows.shadowCard,
                 {
-                    minHeight: cardHeight,
                     backgroundColor: theme.colors.surface,
-                    // The card *role*, not a raw step: this is what guarantees a leave
-                    // card and an `AppCard` can never drift to different corners.
-                    borderRadius: componentRadius.card,
-                    borderWidth: borderWidths.hairline,
-                    // `hairline` in light (matching `AppCard`) and the elevation ring in
-                    // dark, where a hairline border would read as a grey outline.
-                    borderColor: theme.isDark ? theme.darkElevation.ring : theme.colors.hairline,
-                    ...theme.shadows.low,
+                    borderRadius: theme.tokens.radius.rLg,
                 },
+                pressed ? { backgroundColor: theme.colors.surfaceMuted } : null,
             ]}>
-            <View style={[styles.accent, { backgroundColor: theme.colors[accent] }]} />
+            {/* Row 1 — type + status pill. */}
+            <View style={styles.cardTopRow}>
+                <AppText variant="bodyStrong" color="text" numberOfLines={1} style={styles.cardType}>
+                    {request.leave_type?.name ?? 'Leave'}
+                </AppText>
+                <StatusBadge status={request.status} />
+            </View>
 
-            <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${request.leave_type?.name ?? 'Leave'}, ${dates}, ${request.status
-                    }, ${formatTotalDays(request.total_days)}`}
-                testID={`leave-card-${request.id}`}
-                onPress={() => onPress(request.id)}
-                style={({ pressed }) => [
-                    styles.cardBody,
-                    pressed ? { backgroundColor: theme.colors.surfaceMuted } : null,
-                ]}>
-                <View style={[styles.cardText, { gap: spacing.xxs }]}>
-                    <AppText variant="bodyStrong" numberOfLines={1}>
-                        {request.leave_type?.name ?? 'Leave'}
-                    </AppText>
-                    <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                        {dates} · {formatTotalDays(request.total_days)}
-                    </AppText>
+            {/* Row 2 — full date range + decision date. */}
+            <View style={styles.cardDateRow}>
+                <AppText
+                    variant="body"
+                    color="textSecondary"
+                    numberOfLines={2}
+                    style={styles.cardRange}>
+                    {range}
+                </AppText>
+                {decisionLabel !== null ? (
                     <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                        {sessions}
-                        {attachmentCount > 0
-                            ? ` · ${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'}`
-                            : ''}
+                        {decisionLabel}
                     </AppText>
-                    {request.reason ? (
-                        <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                            {request.reason}
-                        </AppText>
-                    ) : null}
-                </View>
+                ) : null}
+            </View>
 
-                <View style={styles.cardTrailing}>
-                    <StatusBadge status={request.status} />
-                    <AppText variant="caption" color="textMuted" numberOfLines={1}>
-                        {formatRelative(request.created_at)}
-                    </AppText>
-                </View>
-            </Pressable>
+            {/* Row 3 — day-part with a sun prefix. */}
+            <View style={styles.cardDayPartRow}>
+                <AppIcon icon={SunGlyph} sizePoints={DAY_PART_ICON_SIZE} color="textMuted" />
+                <AppText variant="caption" color="textMuted" numberOfLines={1}>
+                    {dayPart}
+                </AppText>
+            </View>
+        </Pressable>
+    );
+}
+
+/**
+ * Per-filter empty state.
+ *
+ * A 48pt calendar-off mark over a single line naming the filter, centred with the
+ * spec's 80pt top margin. Deliberately not the shared `EmptyState`: that component
+ * carries a title, a description and a call to action, and this state needs one
+ * line — the FAB is already the call to action.
+ */
+function LeaveEmptyState({ filter }: { filter: FilterKey }): React.JSX.Element {
+    const label = filter === 'all' ? 'No leave requests.' : `No ${filter} requests.`;
+
+    return (
+        <View style={styles.empty}>
+            <AppIcon icon={CalendarOffGlyph} sizePoints={48} color="textMuted" />
+            <AppText variant="body" color="textSecondary" align="center">
+                {label}
+            </AppText>
         </View>
     );
 }
@@ -417,7 +369,10 @@ function LeaveRow({
 const styles = StyleSheet.create({
     body: {
         flex: 1,
-        paddingTop: spacing.xs,
+    },
+    chipRow: {
+        flexGrow: 0,
+        marginTop: 16,
     },
     chipStrip: {
         flexGrow: 0,
@@ -426,39 +381,42 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     listContent: {
-        paddingTop: spacing.xs,
+        paddingTop: 12,
         // Clears the FAB, which floats over the last row. Without this the final
         // card sits underneath the button and its status badge is unreachable.
-        paddingBottom: spacing.huge + spacing.xxl,
+        paddingBottom: 120,
     },
-    cardShell: {
-        flexDirection: 'row',
-        overflow: 'hidden',
-        height: LEAVE_ROW_HEIGHT,
+    card: {
+        padding: 16,
+        gap: 8,
     },
-    accent: {
-        width: spacing.xxs,
-    },
-    cardBody: {
-        flex: 1,
+    cardTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.sm,
-        paddingHorizontal: spacing.md,
-        // The left edge is flush with the strip, so only the right side needs the
-        // card's own inset.
-        paddingVertical: spacing.sm,
-        minWidth: 0,
+        gap: 12,
     },
-    cardText: {
+    cardType: {
         flex: 1,
         minWidth: 0,
     },
-    /** Status badge over its timestamp, right-aligned and never squeezed. */
-    cardTrailing: {
-        alignItems: 'flex-end',
-        flexShrink: 0,
-        gap: spacing.xxs,
+    cardDateRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    cardRange: {
+        flex: 1,
+        minWidth: 0,
+    },
+    cardDayPartRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    empty: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 80,
+        gap: 12,
     },
 });
-

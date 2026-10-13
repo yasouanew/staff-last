@@ -72,8 +72,14 @@ export const en = {
     'relative.days': '{count}d ago',
 
     /* ---- Availability ---- */
-    'availability.timeFormat24h': 'HH:MM, 24-hour',
-    'availability.timeFormat12h': 'H:MM AM/PM',
+    /**
+     * The single hint shown under an availability time input.
+     *
+     * The field always accepts 24-hour `HH:MM` (the API's interchange format), so
+     * there is exactly one spelling of this hint — the previous `12h` variant
+     * described a format the input never accepted and has been removed.
+     */
+    'availability.timeFormat': 'HH:MM (24h)',
 
     /* ---- Accessibility announcements ---- */
     'a11y.passwordUpdated': 'Password updated.',

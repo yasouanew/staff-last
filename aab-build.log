@@ -1,0 +1,136 @@
+Starting a Gradle Daemon, 5 stopped Daemons could not be reused, use --status for details
+> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:shared:compileJava NO-SOURCE
+> Task :gradle-plugin:shared:processResources NO-SOURCE
+> Task :gradle-plugin:shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:jar UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:jar UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:react-native-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:jar UP-TO-DATE
+
+> Configure project :app
+WARNING: The option setting 'android.overridePathCheck=true' is experimental.
+The current default is 'false'.
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: The option setting 'android.newDsl=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: API 'applicationVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling applicationVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'testVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling testVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+WARNING: API 'unitTestVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling unitTestVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+Reading env from: .env
+
+> Configure project :notifee_react-native
+:notifee_react-native @notifee/react-native found at C:\laragon\www\StaffSaaSMobile\node_modules\@notifee\react-native
+:notifee_react-native package.json found at C:\laragon\www\StaffSaaSMobile\node_modules\@notifee\react-native\package.json
+:notifee_react-native:version set from package.json: 9.1.8 (9,1,8 - 9001008)
+:notifee_react-native:android.compileSdk using custom value: 37
+:notifee_react-native:android.targetSdk using custom value: 36
+:notifee_react-native:android.minSdk using custom value: 24
+:notifee_react-native:reactNativeAndroidDir C:\laragon\www\StaffSaaSMobile\node_modules\react-native
+
+> Configure project :react-native-async-storage_async-storage
+WARNING: API 'libraryVariants' is obsolete and has been replaced with 'AndroidComponentsExtension'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+The legacy variant API is disabled by default in AGP 9.0, but can be re-enabled by adding 
+    android.newDsl=false
+to this project's gradle.properties file.
+For more information, see http://developer.android.com/build/r/new-dsl.
+
+To determine what is calling libraryVariants, use -Pandroid.debug.obsoleteApi=true on the command line to display more information.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+ksp-2.2.0-2.0.2 is too old for kotlin-2.2.10. Please upgrade ksp or downgrade kotlin-gradle-plugin to 2.2.0.
+
+> Configure project :react-native-firebase_app
+:react-native-firebase_app package.json found at C:\laragon\www\StaffSaaSMobile\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_app:firebase.bom using default value: 34.18.0
+:react-native-firebase_app:play.play-services-auth using default value: 21.5.0
+:react-native-firebase_app package.json found at C:\laragon\www\StaffSaaSMobile\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_app:version set from package.json: 26.4.0 (26,4,0 - 26004000)
+:react-native-firebase_app:android.compileSdk using custom value: 37
+:react-native-firebase_app:android.targetSdk using custom value: 36
+:react-native-firebase_app:android.minSdk using custom value: 24
+:react-native-firebase_app:reactNativeAndroidDir C:\laragon\www\StaffSaaSMobile\node_modules\react-native
+
+> Configure project :react-native-firebase_messaging
+:react-native-firebase_messaging package.json found at C:\laragon\www\StaffSaaSMobile\node_modules\@react-native-firebase\messaging\package.json
+:react-native-firebase_app package.json found at C:\laragon\www\StaffSaaSMobile\node_modules\@react-native-firebase\app\package.json
+:react-native-firebase_messaging:firebase.bom using default value: 34.18.0
+:react-native-firebase_messaging package.json found at C:\laragon\www\StaffSaaSMobile\node_modules\@react-native-firebase\messaging\package.json
+:react-native-firebase_messaging:version set from package.json: 26.4.0 (26,4,0 - 26004000)
+:react-native-firebase_messaging:android.compileSdk using custom value: 37
+:react-native-firebase_messaging:android.targetSdk using custom value: 36
+:react-native-firebase_messaging:android.minSdk using custom value: 24
+:react-native-firebase_messaging:reactNativeAndroidDir C:\laragon\www\StaffSaaSMobile\node_modules\react-native
+
+> Task :app:createBundleReleaseJsAndAssets
+
+                        ▒▒▓▓▓▓▒▒
+                     ▒▓▓▓▒▒░░▒▒▓▓▓▒
+                  ▒▓▓▓▓░░░▒▒▒▒░░░▓▓▓▓▒
+                 ▓▓▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▓▓
+                 ▓▓░░░░░▒▓▓▓▓▓▓▒░░░░░▓▓
+                 ▓▓░░▓▓▒░░░▒▒░░░▒▓▒░░▓▓
+                 ▓▓░░▓▓▓▓▓▒▒▒▒▓▓▓▓▒░░▓▓
+                 ▓▓░░▓▓▓▓▓▓▓▓▓▓▓▓▓▒░░▓▓
+                 ▓▓▒░░▒▒▓▓▓▓▓▓▓▓▒░░░▒▓▓
+                  ▒▓▓▓▒░░░▒▓▓▒░░░▒▓▓▓▒
+                     ▒▓▓▓▒░░░░▒▓▓▓▒
+                        ▒▒▓▓▓▓▒▒
+
+
+ WARN  the transform cache was reset.
+                Welcome to Metro v0.87.1
+              Fast - Scalable - Integrated
+
+
+ WARN  Attempted to import the module "C:\laragon\www\StaffSaaSMobile\node_modules\react-native\src\private\featureflags\ReactNativeFeatureFlags" which is not listed in the "exports" of "C:\laragon\www\StaffSaaSMobile\node_modules\react-native" under the requested subpath "./src/private/featureflags/ReactNativeFeatureFlags". Falling back to file-based resolution. Consider updating the call site or asking the package maintainer(s) to expose this API.
+LOG:Writing bundle output to: android\app\build\generated\assets\react\release\index.android.bundle
+LOG:Writing sourcemap output to: android\app\build\intermediates\sourcemaps\react\release\index.android.bundle.packager.map
+LOG:Done writing bundle output
+LOG:Done writing sourcemap output
+Copying 21 asset files
+Done copying assets
+Terminate batch job (Y/N)? 
+^CBUILD_FAILED 

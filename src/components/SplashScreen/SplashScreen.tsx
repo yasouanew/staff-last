@@ -75,18 +75,24 @@ export type SplashScreenProps = {
     /**
      * Vector fallback for the logo, used when `logoSource` is absent.
      *
-     * Defaults to [`BrandShieldGlyph`](src/components/AppIcon/glyphs.tsx:1) — the same
-     * mark the Login hero renders — so the splash and the first authenticated screen
-     * cannot disagree about the brand. The app currently ships no raster brand mark,
-     * so this is the default path; supplying `logoSource` later changes only the
-     * mark, never the layout, the 24pt gap or the fade.
+     * Defaults to [`BrandShieldGlyph`](src/components/AppIcon/glyphs.tsx:1). The app
+     * now ships a raster Rosta wordmark and the root passes it as `logoSource`, so
+     * this glyph is only the last-resort fallback; supplying `logoSource` changes
+     * only the mark, never the layout, the 24pt gap or the fade.
      */
     logoGlyph?: IconComponent;
     /**
-     * Intrinsic logo size in points. Both axes are forced equal from this single
-     * value so the mark cannot be stretched by an off-ratio asset.
+     * Logo width in points. The height is derived from `logoAspectRatio`, so a
+     * non-square wordmark is never stretched or letterboxed.
      */
     logoSize?: number;
+    /**
+     * Width ÷ height of the logo asset. Defaults to `1` (square), which is
+     * correct for the vector glyph fallback. A raster wordmark passes its own
+     * ratio (see [`ROSTA_LOGO_ASPECT_RATIO`](src/utils/brandAssets.ts:1)) so the
+     * mark keeps its proportions inside the fixed-width slot.
+     */
+    logoAspectRatio?: number;
     /** Accessible name for the logo. Omit only if the logo is purely decorative. */
     logoAccessibilityLabel?: string;
     /**
@@ -104,20 +110,23 @@ export function SplashScreen({
     logoSource,
     logoGlyph: LogoGlyph = BrandShieldGlyph,
     logoSize = DEFAULT_LOGO_SIZE,
+    logoAspectRatio = 1,
     logoAccessibilityLabel,
-    accessibilityLabel = 'Starting Staff Scheduler',
+    accessibilityLabel = 'Starting Rosta',
     testID,
 }: SplashScreenProps): React.JSX.Element {
     const theme = useTheme();
     const { width, height } = useWindowDimensions();
 
     const logoIsLabelled = logoAccessibilityLabel !== undefined;
+    // Height follows the asset's own ratio; a square glyph keeps the 1:1 slot.
+    const logoHeight = logoSize / logoAspectRatio;
 
     return (
         <View
             testID={testID}
             // One accessible region for the whole splash: a screen reader hears
-            // "Starting Staff Scheduler, progress" instead of two anonymous children.
+            // "Starting Rosta, progress" instead of two anonymous children.
             accessible
             accessibilityRole="progressbar"
             accessibilityLabel={accessibilityLabel}
@@ -140,11 +149,10 @@ export function SplashScreen({
                     accessible={logoIsLabelled}
                     accessibilityRole={logoIsLabelled ? 'image' : undefined}
                     accessibilityLabel={logoAccessibilityLabel}
-                    // A single dimension for both axes: an asset with an off-ratio
-                    // intrinsic size must still occupy an exact square, so the row
-                    // below cannot inherit a fractional offset.
+                    // Width is the fixed slot; height is derived from the asset's
+                    // ratio so the wordmark is neither stretched nor letterboxed.
                     resizeMode="contain"
-                    style={{ width: logoSize, height: logoSize }}
+                    style={{ width: logoSize, height: logoHeight }}
                 />
             ) : (
                 /**
@@ -154,7 +162,7 @@ export function SplashScreen({
                  * would go dark-on-dark in dark mode.
                  */
                 <View
-                    style={{ width: logoSize, height: logoSize }}
+                    style={{ width: logoSize, height: logoHeight }}
                     accessible={logoIsLabelled}
                     accessibilityRole={logoIsLabelled ? 'image' : undefined}
                     accessibilityLabel={logoAccessibilityLabel}>

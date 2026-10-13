@@ -17,6 +17,21 @@ export const leaveTypeSummarySchema = z.object({
     is_paid: z.boolean(),
 });
 
+/**
+ * A numeric field that the backend may serialise as either a JSON number or a
+ * decimal string, normalised to a string.
+ *
+ * `max_days_per_request` is an **integer** column, so it comes back as a bare
+ * number (`1`, `3`) — unlike the `decimal:2` allowance fields, which Laravel casts
+ * to strings. Requiring a string here rejected every real response and surfaced as
+ * "The app received an unexpected response from the server." Accepting both and
+ * normalising keeps one representation for the rest of the app.
+ */
+const numericStringSchema = z
+    .union([z.string(), z.number()])
+    .nullable()
+    .transform(value => (value === null ? null : String(value)));
+
 export const leaveTypeSchema = z.object({
     id: z.number(),
     name: z.string(),
@@ -28,7 +43,7 @@ export const leaveTypeSchema = z.object({
     max_rollover_days: z.string().nullable(),
     requires_approval: z.boolean(),
     allow_half_day: z.boolean(),
-    max_days_per_request: z.string().nullable(),
+    max_days_per_request: numericStringSchema,
     color: z.string().nullable(),
     status: z.string(),
 });
@@ -70,3 +85,28 @@ export const leaveRequestSchema = z.object({
     created_at: z.string(),
     updated_at: z.string(),
 });
+
+/**
+ * The `POST /leave-requests` **201** body.
+ *
+ * The create response is a **partial** `LeaveRequestResource`, not the full resource
+ * the list/detail endpoints return. The spec's example (Screen 9 API 2) carries only
+ * `id, company_id, employee_id, leave_type_id, start_date, end_date, status,
+ * total_days, employee, leave_type` — and even the embedded `leave_type` is trimmed
+ * to `{ id, name }`, which fails [`leaveTypeSummarySchema`](src/features/leave/validation/apiSchemas.ts:13)
+ * (it requires `code` and `is_paid`).
+ *
+ * Validating this against the full [`leaveRequestSchema`](src/features/leave/validation/apiSchemas.ts:61)
+ * therefore rejected every real submission with "The app received an unexpected
+ * response from the server." — the mutation threw, the screen stayed put, and the
+ * user was never returned to the leave list. The unit tests missed it because they
+ * mock the POST with a *full* fixture.
+ *
+ * Only `id` is required — enough to confirm a resource was created — and every other
+ * field is passed through untouched. The client never renders this object: the list
+ * refetches on focus, so the created row comes from `GET /leave-requests`.
+ */
+export const createdLeaveRequestSchema = z.object({ id: z.number() }).passthrough();
+
+/** The partial resource returned by `POST /leave-requests`. */
+export type CreatedLeaveRequest = z.infer<typeof createdLeaveRequestSchema>;

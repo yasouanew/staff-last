@@ -121,9 +121,12 @@ export function AppHeader({
                     paddingHorizontal: theme.screenGutter,
                     backgroundColor: theme.colors.surface,
                     borderBottomWidth: separator ? theme.sizing.borderWidths.hairline : 0,
-                    // A dark surface needs a *lightened* ring to separate; a
-                    // darkened line on a dark background is simply invisible.
-                    borderBottomColor: theme.isDark ? theme.darkElevation.ring : theme.colors.hairline,
+                    // In dark mode the hairline is the primary separator (shadows
+                    // are zeroed), so the header's rule uses the spec's
+                    // `borderHairline` rather than a lightened ring.
+                    borderBottomColor: theme.isDark
+                        ? theme.colors.borderHairline
+                        : theme.colors.hairline,
                     minHeight: flat
                         ? undefined
                         : theme.sizing.layout.headerHeight + insets.top,
@@ -176,9 +179,12 @@ export function AppHeader({
                         {title}
                     </AppText>
                     {subtitle !== undefined ? (
+                        // The spec's caption tier in `inkSecondary` (`textSecondary`):
+                        // a supporting line that is legible but clearly subordinate to
+                        // the title, rather than the faintest `textMuted` tier.
                         <AppText
-                            variant="label"
-                            color="textMuted"
+                            variant="caption"
+                            color="textSecondary"
                             numberOfLines={1}
                             ellipsizeMode="tail">
                             {subtitle}

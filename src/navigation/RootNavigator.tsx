@@ -1,4 +1,9 @@
-import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
+import {
+    DarkTheme as NavigationDarkTheme,
+    DefaultTheme as NavigationDefaultTheme,
+    NavigationContainer,
+    type LinkingOptions,
+} from '@react-navigation/native';
 import type { Theme as NavigationTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect } from 'react';
@@ -15,6 +20,8 @@ import { useCompanyAccess } from '../features/auth/hooks/usePermissions';
 import { isAuthenticatedStatus, useSessionStore } from '../features/auth/store/sessionStore';
 import { usePreferencesStore } from '../features/settings/store/preferencesStore';
 import { useTheme } from '../theme';
+import { ROSTA_LOGO_ASPECT_RATIO, ROSTA_LOGO_WHITE } from '../utils/brandAssets';
+import { navigationRef } from './navigationRef';
 import { AppTabs } from './stacks/AppTabs';
 import { AuthStack } from './stacks/AuthStack';
 import type { RootStackParamList } from './types';
@@ -97,11 +104,17 @@ export function RootNavigator(): React.JSX.Element {
     if (isAuthenticated && isLocked) {
         return (
             <AppBootGate
-                // No asset pipeline dependency for the mark: the default
-                // `logoGlyph` is the same brand shield the Login hero renders, so
-                // the splash and the first authenticated paint cannot disagree
-                // about the brand.
-                splash={{ accessibilityLabel: 'Starting Staff Scheduler' }}>
+                // The white Rosta wordmark: the splash canvas is brand blue in
+                // both colour schemes, so the navy variant would disappear into
+                // it. The same source is used on the main splash below so the two
+                // boot paths cannot disagree about the brand.
+                splash={{
+                    logoSource: ROSTA_LOGO_WHITE,
+                    logoSize: 200,
+                    logoAspectRatio: ROSTA_LOGO_ASPECT_RATIO,
+                    logoAccessibilityLabel: 'Rosta',
+                    accessibilityLabel: 'Starting Rosta',
+                }}>
                 <CompanyLockedView
                     reason={reason}
                     onSignOut={() => signOut.mutate(undefined)}
@@ -112,32 +125,41 @@ export function RootNavigator(): React.JSX.Element {
     }
 
     // React Navigation's own theme drives system chrome (the container background and
-    // the default header/font colours). It is derived from the app theme so the two
-    // cannot drift; `fonts` is required by the type and has no equivalent in our
-    // typography scale, so it is a no-op object.
+    // the default header/font colours). It is built by *extending* React Navigation's
+    // own `DarkTheme`/`DefaultTheme` — rather than hand-rolling the object — so any
+    // key a future version adds is inherited rather than silently dropped. The five
+    // colour slots the spec names are overridden from the app tokens, so the
+    // navigator's chrome and the screens cannot drift.
+    const baseNavigationTheme = theme.isDark ? NavigationDarkTheme : NavigationDefaultTheme;
+
     const navigationTheme: NavigationTheme = {
+        ...baseNavigationTheme,
         // Drives React Navigation's own chrome defaults. Bound to the active
         // scheme (rather than hardcoded `false`) so the container background and
         // default header tint change with the app theme instead of drifting.
         dark: theme.isDark,
         colors: {
+            ...baseNavigationTheme.colors,
             primary: theme.colors.primary,
             background: theme.colors.background,
             card: theme.colors.surface,
             text: theme.colors.text,
-            border: theme.colors.border,
+            // In dark mode the hairline is the primary separator (shadows are
+            // zeroed), so the navigator's border follows it.
+            border: theme.colors.borderHairline,
             notification: theme.colors.danger,
-        },
-        fonts: {
-            regular: { fontFamily: 'System', fontWeight: '400' },
-            medium: { fontFamily: 'System', fontWeight: '500' },
-            bold: { fontFamily: 'System', fontWeight: '700' },
-            heavy: { fontFamily: 'System', fontWeight: '800' },
         },
     };
 
     return (
-        <AppBootGate splash={{ accessibilityLabel: 'Starting Staff Scheduler' }}>
+        <AppBootGate
+            splash={{
+                logoSource: ROSTA_LOGO_WHITE,
+                logoSize: 200,
+                logoAspectRatio: ROSTA_LOGO_ASPECT_RATIO,
+                logoAccessibilityLabel: 'Rosta',
+                accessibilityLabel: 'Starting Rosta',
+            }}>
             <View style={styles.root}>
                 {/**
                  * A token exists but the session could neither be restored from cache
@@ -153,7 +175,7 @@ export function RootNavigator(): React.JSX.Element {
                         busy={signOut.isPending}
                     />
                 ) : (
-                    <NavigationContainer linking={linking} theme={navigationTheme}>
+                    <NavigationContainer ref={navigationRef} linking={linking} theme={navigationTheme}>
                         <Stack.Navigator screenOptions={{ headerShown: false }}>
                             {isAuthenticated ? (
                                 <Stack.Screen name="App" component={AppTabs} />

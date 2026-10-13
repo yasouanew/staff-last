@@ -13,15 +13,17 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import { __resetUnauthorizedCooldown } from '../api/client';
 import { clearToken, saveToken } from '../api/tokenStore';
-import { SECURE_KEYS } from '../config/storageKeys';
+import { SECURE_KEYS, STORAGE_KEYS } from '../config/storageKeys';
 import { useSessionStore, type SessionStatus } from '../features/auth/store/sessionStore';
 import type { AuthUser } from '../features/auth/types';
 import { useNotificationInboxStore } from '../features/notifications/store';
 import { usePreferencesStore } from '../features/settings/store/preferencesStore';
 import { installErrorReporter } from '../services/monitoring';
+import { ThemeProvider } from '../theme';
+import type { ColorSchemePreference } from '../theme/tokens';
 import { useOutboxStore } from '../services/outbox/outboxStore';
 import { usePushStatusStore } from '../services/push/pushStatusStore';
-import { clearAppStorage } from '../utils/storage';
+import { clearAppStorage, removeItem } from '../utils/storage';
 import { clearSecureStorage, setSecureItem } from '../utils/secureStorage';
 import { authUser } from './api/fixtures';
 import { createMockServer, type MockServer } from './api/mockServer';
@@ -46,6 +48,15 @@ export type RenderWithProvidersOptions = Omit<RenderOptions, 'wrapper'> & {
     wrapWithNavigation?: boolean;
     /** Pre-installed MockServer instance. If omitted, a server is initialized. */
     server?: MockServer;
+    /**
+     * Seeds the `ThemeProvider`'s appearance preference. Defaults to `'light'`.
+     *
+     * Seeding (rather than letting the provider hydrate from storage) keeps
+     * tests deterministic and synchronous — the provider renders its children on
+     * the first frame instead of holding a background-coloured splash while the
+     * async read resolves. Pass `'dark'` to render a screen in the dark scheme.
+     */
+    colorScheme?: ColorSchemePreference;
 };
 
 export type RenderWithProvidersResult = RenderResult & {
@@ -87,6 +98,14 @@ export function createMockNavigation<T = unknown>(overrides: Record<string, unkn
                 listeners[type] = bucket.filter(registered => registered !== handler);
             };
         }),
+        /**
+         * Test-only: invokes every handler registered for `type`, so a screen that
+         * reacts to a navigation event (e.g. refetching on `focus`) can be driven
+         * without a real navigator. Not part of the `NavigationProp` surface.
+         */
+        emitEvent: (type: string, event: unknown = {}) => {
+            (listeners[type] ?? []).forEach(handler => handler(event));
+        },
         removeListener: jest.fn(),
         emit: jest.fn((event: { type: string; canPreventDefault?: boolean }) => ({
             defaultPrevented: false,
@@ -136,6 +155,10 @@ export async function resetScreenTestState(server?: MockServer): Promise<void> {
     await clearToken();
     await clearSecureStorage();
     await clearAppStorage();
+    // The appearance preference lives under `@app/color-scheme`, which is
+    // deliberately *outside* the `@staffsaas/` namespace `clearAppStorage`
+    // wipes, so it is removed explicitly to keep suites hermetic.
+    await removeItem(STORAGE_KEYS.colorScheme);
 
     __resetUnauthorizedCooldown();
     installErrorReporter(null);
@@ -211,6 +234,7 @@ export async function renderWithProviders(
         wrapWithNavigation = true,
         server = createMockServer(),
         queryClientConfig,
+        colorScheme = 'light',
         ...renderOptions
     } = options;
 
@@ -280,7 +304,10 @@ export async function renderWithProviders(
             content = <NavigationContainer>{content}</NavigationContainer>;
         }
 
-        return content;
+        // The provider is outermost so the navigator's theme and every screen
+        // resolve from the same seeded scheme. `initialPreference` skips the
+        // async hydration gate, so the tree renders on the first frame.
+        return <ThemeProvider initialPreference={colorScheme}>{content}</ThemeProvider>;
     }
 
     const renderResult = render(ui, { wrapper: AllProviders, ...renderOptions });

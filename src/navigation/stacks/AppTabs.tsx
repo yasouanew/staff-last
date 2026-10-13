@@ -1,6 +1,4 @@
 import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IconComponent } from '../../components/AppIcon';
 import {
@@ -10,11 +8,9 @@ import {
     SunGlyph,
     UserGlyph,
 } from '../../components/AppIcon/glyphs';
-import { TabBarItem } from '../../components/TabBarItem';
+import { TabBar, type TabBarItemModel } from '../../components/TabBar';
 import { useLocalUnreadCount, useUnreadCount } from '../../features/notifications/hooks';
 import { AvailabilityScreen } from '../../features/availability/screens';
-import { useTheme } from '../../theme';
-import { sizing } from '../../theme/sizing';
 import { AccountStack } from './AccountStack';
 import { HomeStack } from './HomeStack';
 import { LeaveStack } from './LeaveStack';
@@ -60,85 +56,52 @@ const TAB_PRESENTATION: Record<keyof AppTabParamList, TabPresentation> = {
 /**
  * Custom bottom tab bar.
  *
- * Replaces the navigator's default bar so that:
+ * The bar itself is the presentational [`TabBar`](src/components/TabBar/TabBar.tsx:1);
+ * this function is the *navigation adapter* that turns React Navigation's
+ * `state`/`descriptors`/`navigation` into the bar's item model. Keeping the two
+ * apart means the bar can be rendered in a test or a preview without a navigator,
+ * and the navigation wiring lives in exactly one place.
  *
- *  - the five slots are exactly one fifth of the width each (`flexBasis: 0`),
- *  - the icon sits at the Phase 2 `medium` (24pt) preset above a micro caption
- *    label,
- *  - the unread badge is an absolute overlay anchored to the icon's bounding box
- *    rather than a navigator-level decoration whose position varies by platform.
+ * ## Unread badge
  *
- * ## Absolute bottom edge
- *
- * The bar is pinned to `bottom: 0`, and its **content** band is the constant
- * `sizing.layout.tabBarHeight`. `insets.bottom` is *added* as padding so the bar
- * clears the swipe-home indicator without compressing the slots on devices that
- * have one. Content scrolls underneath, which is why
- * [`ScreenContainer`](src/components/ScreenContainer/ScreenContainer.tsx:1)
- * reserves `tabBarHeight + insets.bottom` at the bottom of every tab screen.
+ * The Home slot carries the unread count. The local inbox is authoritative: the
+ * badge is exactly the surface that must not go blank when connectivity drops, and
+ * it has to reflect a read the user performed a second ago. The server count only
+ * fills the pre-hydration gap so the badge does not flicker off.
  */
 export function AppTabBar({ state, descriptors, navigation }: BottomTabBarProps): React.JSX.Element {
-    const theme = useTheme();
-    const insets = useSafeAreaInsets();
-
     const serverUnread = useUnreadCount();
     const localCount = useLocalUnreadCount();
-    // The local inbox is authoritative: the badge is exactly the surface that must
-    // not go blank when connectivity drops, and it has to reflect a read the user
-    // performed a second ago. The server count only fills the pre-hydration gap so
-    // the badge does not flicker off.
     const unreadCount = localCount ?? serverUnread.data?.count ?? 0;
 
-    return (
-        <View
-            style={[
-                styles.bar,
-                {
-                    backgroundColor: theme.colors.surface,
-                    // A hairline rather than a full border: the bar floats over
-                    // scrolling content, so the edge only needs to *separate*, not
-                    // to frame. In dark mode the hairline is a lightened ring, since
-                    // a darkened line on a dark surface is invisible.
-                    borderTopWidth: sizing.borderWidths.hairline,
-                    borderTopColor: theme.isDark ? theme.darkElevation.ring : theme.colors.hairline,
-                    paddingBottom: insets.bottom,
-                    // The one place a real shadow is correct: this bar genuinely
-                    // floats over moving content.
-                    ...theme.shadows.medium,
-                },
-            ]}>
-            <View style={styles.slots}>
-                {state.routes.map((route, index) => {
-                    const focused = state.index === index;
-                    const presentation = TAB_PRESENTATION[route.name as keyof AppTabParamList];
+    const items: TabBarItemModel[] = state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const presentation = TAB_PRESENTATION[route.name as keyof AppTabParamList];
 
-                    const onPress = () => {
-                        const event = navigation.emit({
-                            type: 'tabPress',
-                            target: route.key,
-                            canPreventDefault: true,
-                        });
+        const onPress = (): void => {
+            const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+            });
 
-                        if (!focused && !event.defaultPrevented) {
-                            navigation.navigate(route.name);
-                        }
-                    };
+            if (!focused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+            }
+        };
 
-                    return (
-                        <TabBarItem
-                            key={route.key}
-                            icon={presentation.icon}
-                            label={presentation.label}
-                            focused={focused}
-                            onPress={onPress}
-                            badgeCount={route.name === 'HomeTab' ? unreadCount : 0}
-                            testID={descriptors[route.key]?.options.tabBarButtonTestID}
-                        />
-                    );
-                })}
-            </View>
-        </View>
-    );
+        return {
+            key: route.key,
+            icon: presentation.icon,
+            label: presentation.label,
+            focused,
+            onPress,
+            badgeCount: route.name === 'HomeTab' ? unreadCount : 0,
+            testID: descriptors[route.key]?.options.tabBarButtonTestID,
+        };
+    });
+
+    return <TabBar items={items} />;
 }
 
 /**
@@ -168,18 +131,3 @@ export function AppTabs(): React.JSX.Element {
         </Tab.Navigator>
     );
 }
-
-const styles = StyleSheet.create({
-    bar: {
-        // Locked to the absolute bottom edge of the display.
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-    },
-    slots: {
-        flexDirection: 'row',
-        alignItems: 'stretch',
-        height: sizing.layout.tabBarHeight,
-    },
-});

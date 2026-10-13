@@ -33,6 +33,12 @@ export type LeaveType = {
     requires_approval: boolean;
     /** Server flag gating half-day sessions — `allow_half_day`, not `allows_*`. */
     allow_half_day: boolean;
+    /**
+     * Cap on days per request. The backend serialises this **integer** column as a
+     * bare JSON number (`1`, `3`), unlike the `decimal:2` allowance fields which are
+     * strings. The API schema normalises both to a string, so this is always a
+     * string (or `null`) by the time it reaches the app.
+     */
     max_days_per_request: string | null;
     color: string | null;
     status: string;

@@ -8,7 +8,7 @@ import { ErrorView } from '../../../components/ErrorView';
 import { SkeletonList } from '../../../components/Skeleton';
 import { ScreenContainer } from '../../../components/ScreenContainer';
 import { StatusBadge } from '../../../components/StatusBadge';
-import { ShiftCard } from '../../home/components/ShiftCard';
+import { ShiftCard } from '../../../components/ShiftCard';
 import { spacing, useTheme } from '../../../theme';
 import type { AppError } from '../../../types/appError';
 import { formatDate } from '../../../utils/date';

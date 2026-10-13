@@ -1,9 +1,12 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { statusLabel } from '../../i18n';
-import { spacing } from '../../theme/spacing';
-import { lineHeight } from '../../theme/typography';
-import { useTheme } from '../../theme/useTheme';
+import {
+    getStatusPill,
+    statusPillSpec,
+    useThemeTokens,
+    type StatusPillColors,
+} from '../../theme/tokens';
 import { AppText } from '../AppText/AppText';
 
 /**
@@ -43,25 +46,12 @@ export type StatusBadgeProps = {
     style?: ViewStyle;
 };
 
-const STATUS_TONES: Record<string, StatusBadgeTone> = {
-    // shifts
-    scheduled: 'info',
-    completed: 'success',
-    cancelled: 'danger',
-    swap_requested: 'warning',
-    // leave requests
-    pending: 'warning',
-    approved: 'success',
-    rejected: 'danger',
-    // rosters
-    draft: 'neutral',
-    published: 'success',
-    // users
-    active: 'success',
-    inactive: 'neutral',
-};
-
 /*
+ * The status→tone table now lives in [`getStatusPill`](src/theme/tokens.ts:1), so
+ * there is exactly one place a status is mapped to a colour family. This component
+ * only keeps the `tone` prop override, which lets a caller force a family when the
+ * status string alone is ambiguous.
+ *
  * The label vocabulary lives in the i18n catalogue, not in a private map here. Two
  * reasons: the same words are announced by screen readers and rendered by other
  * components (`AvailabilityScreen`'s summary, the leave session labels), so a local
@@ -73,24 +63,28 @@ const STATUS_TONES: Record<string, StatusBadgeTone> = {
  */
 
 export function StatusBadge({ status, label, tone, style }: StatusBadgeProps) {
-    const theme = useTheme();
-    const resolvedTone = tone ?? STATUS_TONES[status] ?? 'neutral';
+    const tokens = useThemeTokens();
     const resolvedLabel = label ?? statusLabel(status);
 
     /**
-     * Tone → the Phase 1 soft/strong pair. The `*Soft` fill with the `*Strong`
-     * foreground is contrast-tuned in both schemes, so the same mapping is legible
-     * on light and dark without a per-scheme branch here.
+     * Tone → the soft/solid pair. The `*Soft` fill with the solid foreground is
+     * contrast-tuned in both schemes, so the same mapping is legible on light and
+     * dark without a per-scheme branch here.
+     *
+     * The default path delegates to [`getStatusPill`](src/theme/tokens.ts:1), which
+     * owns the status→tone table; the explicit `tone` prop is the only reason a
+     * local map still exists, and it reads the same tokens.
      */
-    const toneColors: Record<StatusBadgeTone, { background: string; text: string }> = {
-        neutral: { background: theme.colors.surfaceMuted, text: theme.colors.textSecondary },
-        info: { background: theme.colors.infoSoft, text: theme.colors.infoStrong },
-        success: { background: theme.colors.successSoft, text: theme.colors.successStrong },
-        warning: { background: theme.colors.warningSoft, text: theme.colors.warningStrong },
-        danger: { background: theme.colors.dangerSoft, text: theme.colors.dangerStrong },
+    const toneColors: Record<StatusBadgeTone, StatusPillColors> = {
+        neutral: { bg: tokens.colors.surfaceMuted, fg: tokens.colors.inkSecondary },
+        info: { bg: tokens.colors.infoSoft, fg: tokens.colors.info },
+        success: { bg: tokens.colors.successSoft, fg: tokens.colors.success },
+        warning: { bg: tokens.colors.warningSoft, fg: tokens.colors.warning },
+        danger: { bg: tokens.colors.dangerSoft, fg: tokens.colors.danger },
     };
 
-    const { background, text } = toneColors[resolvedTone];
+    const { bg, fg } =
+        tone !== undefined ? toneColors[tone] : getStatusPill(status, tokens.colors);
 
     return (
         <View
@@ -100,23 +94,21 @@ export function StatusBadge({ status, label, tone, style }: StatusBadgeProps) {
             style={[
                 styles.badge,
                 {
-                    backgroundColor: background,
-                    borderRadius: theme.radius.full,
-                    paddingHorizontal: spacing.xs,
-                    paddingVertical: spacing.xxs,
-                    // The height floor is tokens-only: one caption line plus the
-                    // vertical padding. A pill can therefore never collapse below
-                    // its own curve, however short the word is.
-                    minHeight: lineHeight.xs + spacing.xxs * 2,
+                    backgroundColor: bg,
+                    // Geometry comes from the shared status-pill spec: height 28,
+                    // horizontal padding 12, radius 999.
+                    height: statusPillSpec.height,
+                    borderRadius: statusPillSpec.radius,
+                    paddingHorizontal: statusPillSpec.paddingHorizontal,
                 },
                 style,
             ]}>
             <AppText
-                variant="label"
-                // The pill's height is derived from the caption line plus its
-                // padding, so the label must not grow past that.
+                variant="micro"
+                // The pill's height is pinned to the spec, so the label must not
+                // grow past it.
                 scaling="fixed"
-                style={{ color: text }}
+                style={{ color: fg }}
                 numberOfLines={1}
                 ellipsizeMode="tail">
                 {resolvedLabel}

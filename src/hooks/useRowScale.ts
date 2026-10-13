@@ -9,7 +9,7 @@ import { FONT_SCALE_CAP } from '../theme/sizing';
  *
  * Fixed-height rows are a correctness contract, not a cosmetic choice: the Home,
  * Roster and Leave feeds all hand `getItemLayout` a constant
- * ([`SHIFT_ROW_HEIGHT`](src/features/home/components/ShiftCard.tsx:20),
+ * ([`SHIFT_ROW_HEIGHT`](src/components/ShiftCard/ShiftCard.tsx:20),
  * [`LEAVE_ROW_HEIGHT`](src/features/leave/screens/LeaveListScreen.tsx:72)) so the list
  * can compute scroll offsets without measuring. The moment the OS text size grows the
  * rows, that constant is a *lie*, and the list desyncs — the scrollbar drifts, and

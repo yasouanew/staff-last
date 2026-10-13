@@ -1,5 +1,7 @@
 import { Platform, type ViewStyle } from 'react-native';
 
+import { darkShadowTokens, shadowTokens } from './tokens';
+
 /**
  * Elevation tokens — "soft elevation".
  *
@@ -121,7 +123,7 @@ export type ElevationTier = keyof typeof elevationSpecs;
  * avoids the muddy brown that pure black produces over a blue-tinted canvas.
  * Android is handed the same tint, which it honours on API 28+.
  */
-const SHADOW_INK = '#0B1017';
+const SHADOW_INK = shadowTokens.shadowCard.shadowColor;
 
 /**
  * Translates a spec into the platform's native shadow props.
@@ -158,6 +160,17 @@ function resolveElevation(spec: ElevationSpec): ViewStyle {
  * keep working unchanged.
  */
 export const shadows = {
+    /**
+     * Card — the 2026 spec's resting-card shadow. Carries both the iOS
+     * `shadow*` props and the Android `elevation` integer, so a call site
+     * spreads it and never branches on `Platform.OS`.
+     */
+    card: shadowTokens.shadowCard,
+    /**
+     * Float — the 2026 spec's floating-surface shadow (sheet, dialog, FAB).
+     */
+    float: shadowTokens.shadowFloat,
+
     /** No shadow — for content that sits flat on the canvas. */
     none: resolveElevation(elevationSpecs.none),
     /** Micro lift — resting cards in the refined style. */
@@ -180,6 +193,53 @@ export const shadows = {
 
 export type Shadows = typeof shadows;
 export type ShadowLevel = keyof typeof shadows;
+
+/**
+ * A scheme's elevation set, widened to `ViewStyle` values.
+ *
+ * `Shadows` is derived from the light object and therefore carries literal hex
+ * types; a dark set cannot satisfy those literals. This mapped type keeps the
+ * same key set while allowing each tier to resolve to a different (zeroed)
+ * style, which is what lets `theme.shadows[elevated]` be spread identically in
+ * both schemes.
+ */
+export type ShadowSet = { [K in ShadowLevel]: ViewStyle };
+
+/**
+ * Dark-mode elevation.
+ *
+ * Every tier is zeroed: `shadowOpacity: 0` and `elevation: 0`. A drop shadow is
+ * only visible when it is darker than the surface it falls on, and in dark mode
+ * a raised surface is *lighter* than the canvas — so a shadow is invisible no
+ * matter how strong. The 2026 spec compensates by giving every elevated
+ * component a 1px `borderHairline` border instead (see
+ * [`AppCard`](src/components/AppCard/AppCard.tsx:1), the tab bar and the FAB).
+ *
+ * The key set mirrors [`shadows`](src/theme/shadows.ts:1) exactly, so a call
+ * site spreads `theme.shadows[elevated]` and gets the correct treatment per
+ * scheme with no branch of its own.
+ */
+export const darkShadows: ShadowSet = {
+    card: darkShadowTokens.shadowCard,
+    float: darkShadowTokens.shadowFloat,
+
+    none: resolveElevation(elevationSpecs.none),
+    micro: resolveElevation(elevationSpecs.none),
+    low: resolveElevation(elevationSpecs.none),
+    medium: resolveElevation(elevationSpecs.none),
+    high: resolveElevation(elevationSpecs.none),
+    glass: resolveElevation(elevationSpecs.none),
+
+    xs: resolveElevation(elevationSpecs.none),
+    sm: resolveElevation(elevationSpecs.none),
+    md: resolveElevation(elevationSpecs.none),
+    lg: resolveElevation(elevationSpecs.none),
+} as const;
+
+/** Resolves the elevation set for an explicit scheme. */
+export function shadowsFor(scheme: 'light' | 'dark' | null | undefined): ShadowSet {
+    return scheme === 'dark' ? darkShadows : shadows;
+}
 
 /**
  * Dark-mode elevation.

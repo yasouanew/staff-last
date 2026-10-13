@@ -2,6 +2,7 @@ import notifee, { EventType } from '@notifee/react-native';
 
 import { env } from '../../../config/env';
 import { useSessionStore } from '../../../features/auth/store/sessionStore';
+import { useNotificationInboxStore } from '../../../features/notifications/store';
 import { usePreferencesStore } from '../../../features/settings/store/preferencesStore';
 import { initializePushService } from '../pushService';
 
@@ -17,6 +18,7 @@ type MessageHandler = (message: unknown) => void;
 type ForegroundEventHandler = (event: { type: number }) => void;
 
 let onMessageHandler: MessageHandler | undefined;
+let onNotificationOpenedAppHandler: MessageHandler | undefined;
 let onForegroundEventHandler: ForegroundEventHandler | undefined;
 
 jest.mock('@react-native-firebase/messaging', () => {
@@ -39,7 +41,11 @@ jest.mock('@react-native-firebase/messaging', () => {
 
             return jest.fn();
         }),
-        onNotificationOpenedApp: subscribe,
+        onNotificationOpenedApp: jest.fn((_messaging: unknown, handler: MessageHandler) => {
+            onNotificationOpenedAppHandler = handler;
+
+            return jest.fn();
+        }),
         onTokenRefresh: subscribe,
     };
 });
@@ -51,12 +57,21 @@ let cleanup: (() => void) | undefined;
 beforeEach(async () => {
     jest.clearAllMocks();
     onMessageHandler = undefined;
+    onNotificationOpenedAppHandler = undefined;
     onForegroundEventHandler = undefined;
 
     (env as { fcm: unknown }).fcm = { enabled: true, androidChannelId: 'staffsaas_default' };
 
     useSessionStore.setState({ status: 'authenticated-online', user: { id: 7 } as never });
     usePreferencesStore.setState({ pushEnabled: true, isHydrated: true });
+    useNotificationInboxStore.setState({
+        items: [],
+        hydrated: false,
+        loaded: true,
+        userId: 7,
+        synced: false,
+        watermark: null,
+    });
 
     // Capture the Notifee foreground-event handler the service registers.
     (notifee.onForegroundEvent as jest.Mock).mockImplementation((handler: ForegroundEventHandler) => {
@@ -95,6 +110,30 @@ describe('foreground messages', () => {
         expect(arg.android.pressAction).toEqual({ id: 'default' });
         // The tap handler needs the same stable id the inbox row uses.
         expect(typeof arg.data.localId).toBe('string');
+    });
+});
+
+describe('background notification taps', () => {
+    it('routes the tap without inserting a row (the server is the source of truth)', async () => {
+        const onNotificationOpened = jest.fn();
+
+        cleanup?.();
+        cleanup = undefined;
+
+        // Re-assign `cleanup` so the re-initialised service is torn down after this test;
+        // otherwise `initialized` stays true and the next test's init is a no-op.
+        cleanup = await initializePushService({ onNotificationOpened });
+
+        onNotificationOpenedAppHandler?.({
+            messageId: 'tap-1',
+            data: { type: 'roster.published', roster_id: 9, notification_id: 'ntf-9' },
+            notification: { title: 'Roster published', body: 'Ready.' },
+        });
+
+        // The tap routes...
+        expect(onNotificationOpened).toHaveBeenCalledTimes(1);
+        // ...but creates no row: the row comes from the server sync the caller runs.
+        expect(useNotificationInboxStore.getState().items).toHaveLength(0);
     });
 });
 

@@ -1,10 +1,18 @@
 import { env } from '../../../config/env';
 import type { LeaveSession } from '../../../types/api';
-import { daysBetween } from '../../../utils/date';
+import {
+    daysBetween,
+    formatDate,
+    getMonthShort,
+    parseApiDate,
+    toApiDate,
+} from '../../../utils/date';
 import {
     LEAVE_ATTACHMENT_EXTENSIONS,
     LEAVE_ATTACHMENT_MAX_BYTES,
 } from '../validation/leaveSchemas';
+
+const API_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const LEAVE_SESSION_LABELS: Record<LeaveSession, string> = {
     full_day: 'Full day',
@@ -33,6 +41,93 @@ export function sessionLabel(
     }
 
     return `${start} → ${end}`;
+}
+
+/**
+ * Human label for a request's date range, collapsed when it is a single day.
+ *
+ * The list previously rendered `${formatDate(start)} – ${formatDate(end)}`
+ * unconditionally, which for a one-day request read as the same date twice
+ * ("Mon 21 Sep 2026 – Mon 21 Sep 2026") and, at the card's width, truncated to
+ * "Mon 21 Sep 2026 – Mo…". Two fixes:
+ *
+ *  - **Same-day collapse.** A single day renders once ("21 Sep 2026").
+ *  - **Shortened multi-day form.** A range within one month renders as
+ *    "21 – 23 Sep 2026" rather than repeating the month and year on both ends.
+ *    A range that crosses a month or year boundary keeps both full dates, because
+ *    collapsing those would be ambiguous.
+ *
+ * The day-part (session) is deliberately *not* folded in here — it is its own row
+ * on the card, so a same-day half-day request does not state "First half" twice.
+ *
+ * The result is a string short enough to fit the card on one line in the common
+ * case, with `numberOfLines={2}` at the call site as the fallback for the rest.
+ */
+export function formatLeaveRange(startDate: string, endDate: string): string {
+    if (!API_DATE_RE.test(startDate) || !API_DATE_RE.test(endDate)) {
+        return `${startDate} – ${endDate}`;
+    }
+
+    if (startDate === endDate) {
+        return formatDate(startDate);
+    }
+
+    const start = parseApiDate(startDate);
+    const end = parseApiDate(endDate);
+
+    if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+        return `${start.getDate()} – ${end.getDate()} ${getMonthShort(endDate)} ${end.getFullYear()}`;
+    }
+
+    return `${formatDate(startDate)} – ${formatDate(endDate)}`;
+}
+
+/**
+ * The day-part of a request — the session slot at each end.
+ *
+ * A full-day request reads "Full day"; a half-day request names the half, because
+ * the date alone would imply the whole day is taken. A range with different edge
+ * slots is described as a pair.
+ */
+export function dayPartLabel(
+    startSession?: LeaveSession | null,
+    endSession?: LeaveSession | null,
+): string {
+    const start = startSession ?? 'full_day';
+    const end = endSession ?? 'full_day';
+
+    if (start === end) {
+        return LEAVE_SESSION_LABELS[start];
+    }
+
+    return `${LEAVE_SESSION_LABELS[start]} → ${LEAVE_SESSION_LABELS[end]}`;
+}
+
+/**
+ * The date a request was decided, or `null` while it is still pending.
+ *
+ * Approved requests carry `approved_at`; rejected ones carry `rejected_at`. The
+ * list shows this as a right-aligned caption so a decided request states *when*,
+ * not just *what*.
+ */
+export function decisionDate(request: {
+    status: string;
+    approved_at: string | null;
+    rejected_at: string | null;
+}): string | null {
+    const iso = request.status === 'approved' ? request.approved_at : request.rejected_at;
+
+    if (!iso) {
+        return null;
+    }
+
+    const parsed = new Date(iso);
+
+    if (!Number.isFinite(parsed.getTime())) {
+        return null;
+    }
+
+    return toApiDate(parsed);
 }
 
 /**

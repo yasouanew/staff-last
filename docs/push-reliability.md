@@ -32,14 +32,50 @@ tracked separately in [`pushStatusStore`](../src/services/push/pushStatusStore.t
 - **Retry registration** — shown when push is enabled but not healthy and permission is
   not the blocker.
 
+## Three explicit delivery paths
+
+The service keeps the three FCM delivery paths separate, because mixing them is what
+produces duplicate or missing notifications:
+
+| Path | Trigger | What the app does |
+|---|---|---|
+| **Foreground** | `onMessage` | Persist to the inbox **and** re-post through Notifee (FCM never displays a foreground message). |
+| **Background / terminated** | `setBackgroundMessageHandler` | Persist to the inbox. Display through Notifee **only for a data-only message** — a message with a `notification` block is rendered by the OS, and re-posting it would duplicate it. |
+| **Cold start** | `getInitialNotification` | Persist immediately, then **defer the route** until the session is hydrated (see below). |
+
+### The backend sends a visible payload
+
+For background/terminated delivery the backend sends a **visible** FCM notification (a
+`notification` block plus data), so the OS renders the tray entry itself. The background
+handler's job is then only to persist the content. A **data-only** message is not rendered
+by the OS at all, so the handler posts it through Notifee itself.
+
+### JavaScript is not guaranteed to run
+
+Android and iOS may deliver a visible notification **without** invoking the background
+handler — in particular when the app has been force-stopped. The handler is therefore an
+optimisation, not the source of truth. The durable record is the server's notification
+table, and the reconnect sync (below) recovers anything the handler never saw.
+
+### Cold-start routing is deferred
+
+A tap that launches a cold start runs `getInitialNotification` while the session store is
+still `booting`, so navigating immediately would land on the Auth stack. The tap is held
+in [`pushService`](../src/services/push/pushService.ts:1) and released by
+[`flushPendingNotificationOpen`](../src/services/push/pushService.ts:1) once the session
+is authenticated. The row is persisted immediately, so nothing is lost if the app is
+killed before the flush.
+
 ## Retry on foreground and connectivity restore
 
 [`usePushStatus`](../src/services/push/usePushStatus.ts:1) is mounted once at the root. It
-refreshes OS permission on mount and on every foreground, and retries registration
-whenever the app returns to the foreground with a validated session — the moment
-connectivity has most likely returned. It also reacts to the login transition
-(`authenticated-online`). `registerDevice` short-circuits when there is nothing to do, so
-the foreground retry is cheap.
+refreshes OS permission on mount, on every foreground, and whenever the device comes back
+online. It also reacts to the login transition (`authenticated-online`).
+`registerDevice` short-circuits when there is nothing to do, so the retry is cheap.
+
+Registration and reconciliation on a reconnect are owned by the
+[connectivity coordinator](connectivity-recovery.md), not by this hook — the hook only
+keeps the *permission* display honest.
 
 ## Invalid-token removal
 
@@ -79,6 +115,8 @@ the [sync runner](../src/services/outbox/syncOutbox.ts:1), not dead-lettered.
 
 ## Related
 
+- [`docs/connectivity-recovery.md`](connectivity-recovery.md) — the offline → online
+  recovery pipeline.
 - [`docs/mutation-policy.md`](mutation-policy.md) — the outbox that makes deferred
   unregister durable.
 - [`docs/offline-notification-inbox.md`](offline-notification-inbox.md) — the local inbox.

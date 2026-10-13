@@ -1,51 +1,34 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { Colors } from '../../theme/colors';
-import { radius } from '../../theme/radius';
-import { borderWidths, controlHeights, MIN_TOUCH_TARGET } from '../../theme/sizing';
-import { spacing } from '../../theme/spacing';
-import { lineHeight } from '../../theme/typography';
 import { useTheme } from '../../theme/useTheme';
 import { formatDate } from '../../utils/date';
 import { AppIcon } from '../AppIcon/AppIcon';
-import { CalendarGlyph, ChevronRightGlyph } from '../AppIcon/glyphs';
+import { CalendarGlyph, ChevronDownGlyph } from '../AppIcon/glyphs';
 import { AppText } from '../AppText/AppText';
-import { AppTextInput } from '../AppTextInput';
 
 /**
- * A date field that opens a native picker when the build has one, and says so when
- * it does not.
+ * A date field that opens a picker.
  *
- * ## Why this is not simply a text input
+ * ## Why this is a pressable row, not a text input
  *
- * The brief is explicit that dates must not be "raw web text drops", and the screen
- * this replaces was exactly that: an `AppTextInput` with
- * `placeholder="YYYY-MM-DD"`, which asks the user to know and type an interchange
- * format. A date is chosen, not spelled.
+ * A date is chosen, not spelled. The screen this replaces asked the user to type
+ * `YYYY-MM-DD` into a text box — an interchange format no user should have to know.
+ * This is a settings-style row: a leading calendar glyph, the formatted value, and a
+ * trailing chevron-down that reads as "tap to open".
  *
- * ## Why it is also not simply a button
+ * ## Geometry (2026 spec)
  *
- * `package.json` has no date-picker dependency, so a press target that does nothing
- * would be a dead control. This component therefore has two honest modes, chosen by
- * [`isNativePickerAvailable`](src/features/leave/utils/datePicker.tsx:78):
- *
- *  - **Native** — a press target, styled like a settings row (leading calendar
- *    glyph, centred value, trailing chevron). Reads as "tap to choose".
- *  - **Fallback** — a real `AppTextInput` constrained to the API's date format,
- *    with helper text that names the missing capability. Reads as "type it, because
- *    nothing here can open a picker".
- *
- * The two modes are visually distinct on purpose. A text box pretending to be a
- * picker is worse than a text box: the user taps it expecting a calendar and gets a
- * keyboard.
+ *     label (caption, inkSecondary)
+ *     control (52pt tall, radius 14, 1pt hairline, 16pt horizontal padding)
+ *     message (caption) — only when there is an error/helper
  *
  * ## Why the value is an API date string, not a `Date`
  *
  * The form's schema, the zod validation, and the request payload all speak
  * `YYYY-MM-DD` (see [`leaveSchemas`](src/features/leave/validation/leaveSchemas.ts:1)).
  * Converting at the boundary — and only at the boundary — means the screen never
- * holds a `Date` that might drift a day through a timezone. `''` means "unset",
- * which is what the form starts with and what `zod` treats as empty.
+ * holds a `Date` that might drift a day through a timezone. `''` means "unset".
  */
 
 export type DateFieldProps = {
@@ -56,181 +39,115 @@ export type DateFieldProps = {
     error?: string;
     helper?: string;
     required?: boolean;
-    /** Inclusive lower bound, as an API date. Passed through to the native picker. */
+    /** Inclusive lower bound, as an API date. Passed through to the picker. */
     minimumDate?: string;
     /**
-     * Whether the build can actually open a native picker.
+     * Opens the picker. Supplied by the screen's single `useDatePicker`.
      *
-     * Supplied by the screen from a single
-     * [`useDatePicker`](src/features/leave/utils/datePicker.tsx:1) call so this atom
-     * holds no dependency on the feature module, and so a unit test can render both
-     * branches without stubbing a native module.
-     *
-     * Defaults to `false`: if a caller forgets to thread it through, the field
-     * degrades to a working typed input rather than to a press target that does
-     * nothing. Failing towards "usable" is the only safe default for a control the
-     * user must operate to submit the form.
+     * Retained for API compatibility; the picker seam now always provides a
+     * renderer (native module or the built-in calendar), so this is always wired.
+     */
+    onRequestPicker: (currentValue: string, minimumDate?: string) => void;
+    /**
+     * @deprecated The picker seam now always opens a real picker, so this no longer
+     * selects a fallback branch. Kept so existing call sites keep compiling.
      */
     isNativePickerAvailable?: boolean;
-    /** Opens the native picker. Supplied by the screen's single `useDatePicker`. */
-    onRequestPicker: (currentValue: string, minimumDate?: string) => void;
     testID?: string;
     /** Rendered inside the same row as the value, for a trailing slot. */
     trailing?: React.ReactNode;
 };
 
+/* ---- Spec geometry -------------------------------------------------- */
+
+/** Control height — the spec's 52. */
+const FIELD_HEIGHT = 52;
+/** Control radius — the spec's 14. */
+const FIELD_RADIUS = 14;
+/** Horizontal inset — the spec's 16. */
+const FIELD_PADDING = 16;
+/** Leading calendar glyph — the spec's 18. */
+const CALENDAR_ICON_SIZE = 18;
+/** Gap between the label and the control. */
+const LABEL_GAP = 6;
+
 export function DateField({
     label,
     value,
-    onChange,
     error,
     helper,
     required = false,
     minimumDate,
-    isNativePickerAvailable = false,
     onRequestPicker,
     testID,
     trailing,
 }: DateFieldProps): React.JSX.Element {
-    const hasError = typeof error === 'string' && error.length > 0;
-
-    /*
-     * Both branches share the label band and the message band so that a field
-     * swapping between them — which cannot happen at runtime, but *can* happen
-     * between builds — occupies the same vertical space either way. That keeps a
-     * screenshot diff honest.
-     */
-    const shared = {
-        label: required ? `${label} *` : label,
-        error,
-        helper,
-    };
-
-    return (
-        <View style={styles.container} testID={testID}>
-            <FieldLabel text={shared.label} hasError={hasError} />
-            <DateFieldControl
-                value={value}
-                onChange={onChange}
-                hasError={hasError}
-                minimumDate={minimumDate}
-                isNativePickerAvailable={isNativePickerAvailable}
-                onRequestPicker={onRequestPicker}
-                trailing={trailing}
-            />
-            <MessageBand error={error} helper={helper} />
-        </View>
-    );
-}
-
-/** Label band, deliberately the same height as `AppTextInput`'s. */
-function FieldLabel({ text, hasError }: { text: string; hasError: boolean }): React.JSX.Element {
-    return (
-        <View style={styles.labelBand}>
-            <AppText variant="label" color={hasError ? 'danger' : 'textSecondary'} numberOfLines={1}>
-                {text}
-            </AppText>
-        </View>
-    );
-}
-
-type ControlProps = {
-    value: string;
-    onChange: (apiDate: string) => void;
-    hasError: boolean;
-    minimumDate?: string;
-    isNativePickerAvailable: boolean;
-    onRequestPicker: (currentValue: string, minimumDate?: string) => void;
-    trailing?: React.ReactNode;
-};
-
-function DateFieldControl({
-    value,
-    onChange,
-    hasError,
-    minimumDate,
-    isNativePickerAvailable,
-    onRequestPicker,
-    trailing,
-}: ControlProps): React.JSX.Element {
     const theme = useTheme();
-
-    /*
-     * The fallback is a real, format-constrained input rather than a disabled
-     * button: the user still has to be able to submit the form on a build whose
-     * native picker is missing. The helper text names the absent capability so the
-     * gap is visible to whoever reads the screen, not just to whoever reads the
-     * package manifest.
-     */
-    if (!isNativePickerAvailable) {
-        return (
-            <AppTextInput
-                label=""
-                value={value}
-                onChangeText={onChange}
-                placeholder="YYYY-MM-DD"
-                helper="Date picker unavailable in this build — type the date."
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-                error={hasError ? ' ' : undefined}
-            />
-        );
-    }
-
-    const borderColor = hasError ? theme.colors.danger : theme.colors.borderStrong;
-
-    return (
-        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-            <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${value === '' ? 'No date chosen' : formatDate(value)}. Tap to choose a date.`}
-                onPress={() => onRequestPicker(value, minimumDate)}
-                style={({ pressed }) => [
-                    styles.control,
-                    {
-                        borderColor,
-                        borderRadius: theme.radius.sm,
-                        backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
-                        paddingHorizontal: spacing.sm,
-                        minHeight: controlHeights.md,
-                    },
-                ]}>
-                <AppIcon icon={CalendarGlyph} size="small" color="textSecondary" />
-                <AppText
-                    variant="body"
-                    color={value === '' ? 'textMuted' : 'text'}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={styles.value}>
-                    {value === '' ? 'Choose a date' : formatDate(value, { long: true })}
-                </AppText>
-                <AppIcon icon={ChevronRightGlyph} size="small" color="textMuted" />
-            </Pressable>
-            {trailing}
-        </View>
-    );
-}
-
-/**
- * The message band, always mounted at a fixed height.
- *
- * Same rule as `AppTextInput`: reserving the line means an error appearing does not
- * push the rest of the form down, which is what stops a validation failure from
- * moving the button the user is about to press.
- */
-function MessageBand({ error, helper }: { error?: string; helper?: string }): React.JSX.Element {
     const hasError = typeof error === 'string' && error.length > 0;
 
+    const borderColor = hasError ? theme.colors.danger : theme.tokens.colors.borderHairline;
+
     return (
-        <View style={styles.messageBand}>
+        <View style={styles.container}>
+            <AppText
+                variant="caption"
+                scaling="fixed"
+                style={[styles.label, { color: theme.tokens.colors.inkSecondary }]}>
+                {required ? `${label} *` : label}
+            </AppText>
+
+            <View style={styles.row}>
+                <Pressable
+                    testID={testID}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${label}. ${value === '' ? 'No date chosen' : formatDate(value)}. Tap to choose a date.`}
+                    onPress={() => onRequestPicker(value, minimumDate)}
+                    style={({ pressed }) => [
+                        styles.control,
+                        {
+                            height: FIELD_HEIGHT,
+                            borderRadius: FIELD_RADIUS,
+                            paddingHorizontal: FIELD_PADDING,
+                            borderColor,
+                            backgroundColor: pressed
+                                ? theme.colors.surfaceMuted
+                                : theme.colors.surface,
+                        },
+                    ]}>
+                    <AppIcon
+                        icon={CalendarGlyph}
+                        sizePoints={CALENDAR_ICON_SIZE}
+                        color="textMuted"
+                    />
+                    <AppText
+                        variant="body"
+                        color={value === '' ? 'textMuted' : 'text'}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                        style={styles.value}>
+                        {value === '' ? 'Choose a date' : formatDate(value)}
+                    </AppText>
+                    <AppIcon icon={ChevronDownGlyph} size="small" color="textMuted" />
+                </Pressable>
+                {trailing}
+            </View>
+
             {hasError ? (
-                <AppText variant="caption" color="danger">
+                <AppText
+                    variant="caption"
+                    color="danger"
+                    scaling="fixed"
+                    numberOfLines={2}
+                    accessibilityLiveRegion="polite"
+                    style={styles.message}>
                     {error}
                 </AppText>
             ) : helper !== undefined ? (
-                <AppText variant="caption" color="textMuted">
+                <AppText
+                    variant="caption"
+                    scaling="fixed"
+                    numberOfLines={2}
+                    style={[styles.message, { color: theme.tokens.colors.inkTertiary }]}>
                     {helper}
                 </AppText>
             ) : null}
@@ -239,35 +156,33 @@ function MessageBand({ error, helper }: { error?: string; helper?: string }): Re
 }
 
 /** The colour a caller should tint a calendar glyph with, by state. */
-export const DATE_FIELD_ICON_COLOR: keyof Colors = 'textSecondary';
+export const DATE_FIELD_ICON_COLOR: keyof Colors = 'textMuted';
 
 const styles = StyleSheet.create({
     container: {
-        gap: spacing.xxs,
+        width: '100%',
     },
-    labelBand: {
-        minHeight: lineHeight.xs,
-        justifyContent: 'center',
+    label: {
+        marginBottom: LABEL_GAP,
     },
-    messageBand: {
-        minHeight: lineHeight.xs,
-        justifyContent: 'center',
-    },
-    control: {
+    row: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.sm,
-        borderWidth: borderWidths.hairline,
-        // A field must never be shorter than the minimum touch target even though
-        // its painted band matches the other inputs at 44.
-        minHeight: MIN_TOUCH_TARGET,
+        gap: 12,
+    },
+    control: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderWidth: 1,
     },
     value: {
         flex: 1,
-        // See the Phase 6 spec §0.3: without this a long formatted date pushes the
-        // trailing chevron out of the field.
+        // Without this a long formatted date pushes the trailing chevron out.
         minWidth: 0,
     },
+    message: {
+        marginTop: LABEL_GAP,
+    },
 });
-
-export { radius as dateFieldRadius };

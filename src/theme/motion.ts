@@ -1,4 +1,8 @@
-import { Easing, type EasingFunction } from 'react-native';
+import {
+    Easing,
+    type EasingFunction,
+    type EasingFunctionFactory,
+} from 'react-native-reanimated';
 
 /**
  * Motion tokens.
@@ -12,10 +16,17 @@ import { Easing, type EasingFunction } from 'react-native';
  *
  * Two families are exported because the codebase uses two animation runtimes:
  *
- *  - `duration` / `easing` / `springs` are plain values, safe for React Native's
- *    built-in `Animated` API (used by the existing skeleton shimmer).
- *  - `springs` are also valid `withSpring` configs for Reanimated 4, which the
- *    upgraded components use for press feedback and sheet dismissal.
+ *  - `duration` is a plain value, safe for React Native's built-in `Animated`
+ *    API (used by the existing skeleton shimmer).
+ *  - `easing` and `springs` are Reanimated 4 configs, consumed by `withTiming`
+ *    and `withSpring` for press feedback and sheet motion.
+ *
+ * `easing` is built from **Reanimated's** `Easing`, not React Native's. Reanimated
+ * 4 runs `withTiming` on the UI thread and asserts that the easing it is handed
+ * is a worklet; React Native's `Easing` functions are not, so passing one throws
+ * "[Reanimated] The easing function is not a worklet" the moment the animation
+ * starts. Reanimated's own `Easing` is workletised, so the curves must come from
+ * there.
  *
  * Everything here is scheme-independent and respects reduced-motion: consumers
  * are expected to short-circuit to `duration.instant` when
@@ -46,39 +57,22 @@ export const duration = {
  * and Android; the material-style curves are provided for directional motion
  * (something entering vs. leaving the viewport).
  */
-export const easing = {
+export const easing: {
+    /** `bezier` returns a factory, which `withTiming` also accepts. */
+    standard: EasingFunctionFactory;
+    decelerate: EasingFunction;
+    accelerate: EasingFunction;
+    linear: EasingFunction;
+} = {
     /** Symmetric ease-in-out. Default for state changes that stay on screen. */
-    standard: Easing.bezier(0.2, 0, 0, 1) as EasingFunction,
+    standard: Easing.bezier(0.2, 0, 0, 1),
     /** Entering the viewport — starts fast, settles. */
-    decelerate: Easing.out(Easing.cubic) as EasingFunction,
+    decelerate: Easing.out(Easing.cubic),
     /** Leaving the viewport — starts slow, exits fast. */
-    accelerate: Easing.in(Easing.cubic) as EasingFunction,
+    accelerate: Easing.in(Easing.cubic),
     /** Constant-velocity travel for looping shimmer. */
-    linear: Easing.linear as EasingFunction,
-} as const;
-
-/* TEMP DIAGNOSTIC — validates the "easing is not a worklet" hypothesis.
- * Remove once the fix is verified. */
-{
-    const { Easing: ReanimatedEasing } = require('react-native-reanimated') as {
-        Easing: typeof Easing;
-    };
-    const hasWorklet = (fn: unknown): boolean =>
-        Boolean((fn as { __workletHash?: number } | null)?.__workletHash);
-    // eslint-disable-next-line no-console
-    console.log('[motion][diag] react-native easing worklet markers', {
-        standard: hasWorklet(easing.standard),
-        decelerate: hasWorklet(easing.decelerate),
-        accelerate: hasWorklet(easing.accelerate),
-        linear: hasWorklet(easing.linear),
-    });
-    // eslint-disable-next-line no-console
-    console.log('[motion][diag] reanimated easing worklet markers', {
-        decelerate: hasWorklet(ReanimatedEasing.out(ReanimatedEasing.cubic)),
-        accelerate: hasWorklet(ReanimatedEasing.in(ReanimatedEasing.cubic)),
-        linear: hasWorklet(ReanimatedEasing.linear),
-    });
-}
+    linear: Easing.linear,
+};
 
 /**
  * Spring configurations for Reanimated.

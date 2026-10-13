@@ -42,10 +42,21 @@
 
         android:value="@string/default_notification_channel_id"
       -->
-      <meta-data      
+      <meta-data
         android:name="com.google.firebase.messaging.default_notification_channel_id"
         android:value="staffsaas_default"
         tools:replace="android:value" />
+
+      <!--
+        Status-bar icon for FCM messages the OS renders itself (background/terminated
+        delivery). Without this the SDK falls back to the launcher icon, which Android
+        renders as a solid white square because it keeps only the alpha channel. The
+        drawable is a white-on-transparent bell; the same resource is used by Notifee
+        for foreground banners (see displayNotification in pushService).
+      -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@drawable/ic_notification" />
       <!-- Required for Notifee background event tracking, button taps, and display hooks when terminated -->
       <receiver android:name="io.invertase.notifee.NotifeeReceiver" android:exported="true" />
       

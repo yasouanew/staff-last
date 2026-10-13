@@ -4,8 +4,12 @@ import { useEffect, useRef } from 'react';
 import { isAuthenticatedStatus, useSessionStore } from '../../features/auth/store/sessionStore';
 import { usePreferencesStore } from '../../features/settings/store/preferencesStore';
 import { useNotificationInboxStore } from '../../features/notifications/store';
+import { syncNotifications } from '../../features/notifications/sync';
+import { routeForNotification } from '../../features/notifications/utils/notificationRouting';
+import { navigateWhenReady } from '../../navigation/navigationRef';
 import { queryKeys } from '../../utils/queryKeys';
 import {
+    flushPendingNotificationOpen,
     initializePushService,
     registerDevice,
     unregisterDevice,
@@ -46,8 +50,29 @@ export function usePushNotifications(): void {
         onForegroundMessage: () => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
         },
-        onNotificationOpened: () => {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+        onNotificationOpened: message => {
+            /*
+             * A tap reconciles against the server; it does **not** insert a row.
+             *
+             * The backend notification record is the single source of truth, so the row
+             * for this event is either already in the inbox (persisted by the background
+             * handler) or is fetched here. `syncNotifications` upserts by the canonical
+             * `notification_id`, so it can never add a second row for the same event —
+             * which is exactly what persisting the tap payload used to do.
+             */
+            void syncNotifications()
+                .catch(() => undefined)
+                .finally(() => {
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+                });
+
+            // Route the tap to the screen the notification is about. The payload's
+            // `data` bag carries the business key (`type` + id); an unknown type
+            // falls back to the Notifications list, so a tap always lands somewhere.
+            // `navigateWhenReady` returns false if the container is not mounted yet
+            // (a cold start); the service holds the tap and re-invokes this handler
+            // via `flushPendingNotificationOpen` once the session is authenticated.
+            navigateWhenReady(routeForNotification(message?.data));
         },
     };
 
@@ -93,4 +118,16 @@ export function usePushNotifications(): void {
 
         void hydrateInbox(userId);
     }, [hydrateInbox, status, userId]);
+
+    // Release a cold-start notification tap once the session is hydrated. The tap is
+    // captured during `initializePushService` while the store is still `booting`, so
+    // routing it then would land on the Auth stack; this is the point at which the
+    // navigator is mounted and the user is authenticated.
+    useEffect(() => {
+        if (!isAuthenticatedStatus(status)) {
+            return;
+        }
+
+        flushPendingNotificationOpen();
+    }, [status]);
 }

@@ -51,7 +51,7 @@ const config = {
          * keeping file-map keys consistent with the resolver. Watchman is only a
          * performance optimisation here, not a correctness requirement.
          */
-        useWatchman: false,
+        useWatchman: true,
     },
     serializer: {
         getModulesRunBeforeMainModule: () =>

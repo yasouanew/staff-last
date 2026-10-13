@@ -121,8 +121,9 @@ describe('HomeScreen', () => {
 
             await waitFor(() => expect(screen.getByText('CBD Store')).toBeTruthy());
 
-            // The card's centre slot: branch on line one, `department · position` below.
-            expect(screen.getByText('Front · Cashier')).toBeTruthy();
+            // The card's middle slot: branch on line one, the duration below.
+            // 09:00–17:00 less a 30-minute unpaid break = 7h 30m.
+            expect(screen.getByText('7h 30m')).toBeTruthy();
             // Derived from the same payload, so a shape regression cannot pass unnoticed.
             expect(screen.getByText('Today')).toBeTruthy();
             expect(screen.getByText('1 scheduled')).toBeTruthy();

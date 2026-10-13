@@ -305,6 +305,27 @@ export function CalendarCheckGlyph({ size = 24, color = '#000', strokeWidth = 2 
     );
 }
 
+/**
+ * Calendar with a diagonal slash — "no dates here".
+ *
+ * The empty-state mark for a filtered leave feed. A bare calendar would read as
+ * "a date", which is the opposite of the message; the slash is what makes it
+ * "nothing scheduled". Drawn on the same 24 × 24 grid as the rest of the set.
+ */
+export function CalendarOffGlyph({ size = 24, color = '#000', strokeWidth = 2 }: GlyphProps) {
+    const s = stroke(color, strokeWidth);
+
+    return (
+        <Svg width={size} height={size} viewBox={VIEW_BOX} fill="none">
+            <Rect {...s} x={3} y={4} width={18} height={18} rx={2} />
+            <Line {...s} x1={16} y1={2} x2={16} y2={6} />
+            <Line {...s} x1={8} y1={2} x2={8} y2={6} />
+            <Line {...s} x1={3} y1={10} x2={21} y2={10} />
+            <Line {...s} x1={4} y1={20} x2={20} y2={4} />
+        </Svg>
+    );
+}
+
 /** Roof over a doorway — the home tab. */
 export function HomeGlyph({ size = 24, color = '#000', strokeWidth = 2 }: GlyphProps) {
     const s = stroke(color, strokeWidth);
@@ -416,6 +437,25 @@ export function BellGlyph({ size = 24, color = '#000', strokeWidth = 2 }: GlyphP
     );
 }
 
+/**
+ * Bell with a diagonal slash — "no notifications".
+ *
+ * The empty-state mark for the notification feed. A bare bell would read as "you
+ * have notifications", which is the opposite of the message; the slash is what
+ * makes it "nothing here".
+ */
+export function BellOffGlyph({ size = 24, color = '#000', strokeWidth = 2 }: GlyphProps) {
+    const s = stroke(color, strokeWidth);
+
+    return (
+        <Svg width={size} height={size} viewBox={VIEW_BOX} fill="none">
+            <Path {...s} d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <Path {...s} d="M13.73 21a2 2 0 0 1-3.46 0" />
+            <Line {...s} x1={3} y1={3} x2={21} y2={21} />
+        </Svg>
+    );
+}
+
 /** Three tracks with handles — settings / preferences. */
 export function SlidersGlyph({ size = 24, color = '#000', strokeWidth = 2 }: GlyphProps) {
     const s = stroke(color, strokeWidth);
@@ -463,6 +503,39 @@ export function CheckGlyph({ size = 16, color = '#000', strokeWidth = 2 }: Glyph
     return (
         <Svg width={size} height={size} viewBox={VIEW_BOX} fill="none">
             <Polyline {...s} points="20 6 9 17 4 12" />
+        </Svg>
+    );
+}
+
+/** A paperclip — the attach-file affordance. */
+export function PaperclipGlyph({ size = 18, color = '#000', strokeWidth = 2 }: GlyphProps) {
+    const s = stroke(color, strokeWidth);
+
+    return (
+        <Svg width={size} height={size} viewBox={VIEW_BOX} fill="none">
+            <Path
+                {...s}
+                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+            />
+        </Svg>
+    );
+}
+
+/**
+ * Circled tick — the "reset link sent" confirmation badge.
+ *
+ * A bare tick reads as an inline validation mark; wrapping it in a ring makes it
+ * a *status* mark that can carry a whole screen's success state on its own. Drawn
+ * on the same 24 × 24 grid as the rest of the set, so it scales with the badge
+ * that holds it.
+ */
+export function CheckCircleGlyph({ size = 24, color = '#000', strokeWidth = 2 }: GlyphProps) {
+    const s = stroke(color, strokeWidth);
+
+    return (
+        <Svg width={size} height={size} viewBox={VIEW_BOX} fill="none">
+            <Circle {...s} cx={12} cy={12} r={10} />
+            <Polyline {...s} points="8 12.5 11 15.5 16 9.5" />
         </Svg>
     );
 }

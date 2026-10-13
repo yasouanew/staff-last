@@ -29,6 +29,18 @@
 			</array>
 		</dict>
 	</array>
+	<!--
+		No data is collected by a third-party SDK or used for tracking. The app talks
+		only to the first-party Laravel backend; the device push token and account
+		identifiers are processed for app functionality (authentication and delivering
+		notifications), not for advertising or tracking. No analytics/crash SDK is
+		linked (MONITORING_ENABLED is false — see .env.production).
+
+		If a third-party SDK (Firebase Analytics, Crashlytics, Sentry, Bugsnag, …) is
+		ever linked, declare each collected type here and add its
+		NSPrivacyTrackingDomains. The "collected types" you disclose in App Store
+		Connect are a separate, legally binding declaration — keep both in sync.
+	-->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
 	<key>NSPrivacyTracking</key>

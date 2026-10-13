@@ -3,6 +3,7 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View, type ViewStyle }
 
 import { radiusRoles } from '../../theme/radius';
 import { spacing } from '../../theme/spacing';
+import { statusPillSpec } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 
 /**
@@ -202,8 +203,8 @@ export function SkeletonRect({ width = '100%', height, radius, style }: Skeleton
  * Pill — status badges, filter chips, buttons.
  *
  * Defaults to the real [`StatusBadge`](src/components/StatusBadge/StatusBadge.tsx:1)
- * height (`lineHeight.xs + spacing.xxs × 2`), so a placeholder badge and a real
- * badge occupy identical space.
+ * geometry (`statusPillSpec.height`), so a placeholder badge and a real badge
+ * occupy identical space.
  */
 export function SkeletonPill({ width = 72, style }: Pick<SkeletonShapeProps, 'width' | 'style'>) {
     const theme = useTheme();
@@ -217,8 +218,8 @@ export function SkeletonPill({ width = 72, style }: Pick<SkeletonShapeProps, 'wi
             style={[
                 {
                     width,
-                    height: theme.typography.lineHeight.xs + spacing.xxs * 2,
-                    borderRadius: radiusRoles.pill.full,
+                    height: statusPillSpec.height,
+                    borderRadius: statusPillSpec.radius,
                     backgroundColor: theme.colors.skeleton,
                 },
                 shimmerStyle,

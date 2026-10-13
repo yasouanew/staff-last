@@ -1,5 +1,8 @@
 import {
     attachmentFileName,
+    dayPartLabel,
+    decisionDate,
+    formatLeaveRange,
     formatTotalDays,
     previewTotalDays,
     resolveAttachmentUrl,
@@ -23,6 +26,72 @@ describe('sessionLabel', () => {
         expect(sessionLabel('2026-09-20', '2026-09-22', 'first_half', 'second_half')).toBe(
             'First half → Second half',
         );
+    });
+});
+
+describe('formatLeaveRange', () => {
+    it('collapses a single-day request to one date', () => {
+        expect(formatLeaveRange('2026-09-21', '2026-09-21')).toBe('Mon 21 Sep 2026');
+    });
+
+    it('shortens a same-month range without repeating the month and year', () => {
+        expect(formatLeaveRange('2026-09-21', '2026-09-23')).toBe('21 – 23 Sep 2026');
+    });
+
+    it('keeps both full dates when the range crosses a month boundary', () => {
+        expect(formatLeaveRange('2026-09-30', '2026-10-02')).toBe(
+            'Wed 30 Sep 2026 – Fri 2 Oct 2026',
+        );
+    });
+
+    it('passes a malformed range through rather than rendering NaN', () => {
+        expect(formatLeaveRange('not-a-date', '2026-09-23')).toBe('not-a-date – 2026-09-23');
+    });
+});
+
+describe('dayPartLabel', () => {
+    it('reads "Full day" for a full-day request', () => {
+        expect(dayPartLabel('full_day', 'full_day')).toBe('Full day');
+    });
+
+    it('names the half for a half-day request', () => {
+        expect(dayPartLabel('first_half', 'first_half')).toBe('First half');
+    });
+
+    it('describes a range with different edge slots as a pair', () => {
+        expect(dayPartLabel('first_half', 'second_half')).toBe('First half → Second half');
+    });
+
+    it('defaults a missing slot to a full day', () => {
+        expect(dayPartLabel(null, null)).toBe('Full day');
+    });
+});
+
+describe('decisionDate', () => {
+    it('returns the approved date for an approved request', () => {
+        expect(
+            decisionDate({
+                status: 'approved',
+                approved_at: '2026-09-25T10:00:00+10:00',
+                rejected_at: null,
+            }),
+        ).toBe('2026-09-25');
+    });
+
+    it('returns the rejected date for a rejected request', () => {
+        expect(
+            decisionDate({
+                status: 'rejected',
+                approved_at: null,
+                rejected_at: '2026-09-26T10:00:00+10:00',
+            }),
+        ).toBe('2026-09-26');
+    });
+
+    it('returns null while a request is still pending', () => {
+        expect(
+            decisionDate({ status: 'pending', approved_at: null, rejected_at: null }),
+        ).toBeNull();
     });
 });
 

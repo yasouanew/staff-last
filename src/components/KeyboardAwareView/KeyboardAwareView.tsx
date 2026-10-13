@@ -98,6 +98,14 @@ export type KeyboardAwareViewProps = {
      * intermittent across the test rack rather than constant.
      */
     ownsTopInset?: boolean;
+    /**
+     * Canvas colour behind the scroller. Defaults to `theme.colors.background`.
+     *
+     * The auth screens render on `surface` (a flat white) rather than the
+     * blue-tinted canvas, so the brand mark and the form read as one sheet. The
+     * scroller owns the fill because it is the outermost painted layer here.
+     */
+    backgroundColor?: string;
     /** Extra style merged onto the scroller's content container. */
     contentContainerStyle?: ViewStyle;
     style?: ViewStyle;
@@ -108,6 +116,7 @@ export function KeyboardAwareView({
     keyboardVerticalOffset = 0,
     refreshControl,
     ownsTopInset = false,
+    backgroundColor,
     contentContainerStyle,
     style,
 }: KeyboardAwareViewProps): React.JSX.Element {
@@ -152,7 +161,10 @@ export function KeyboardAwareView({
                 keyboardVerticalOffset={keyboardVerticalOffset}>
                 <ScrollView
                     ref={scrollRef}
-                    style={[styles.container, { backgroundColor: theme.colors.background }]}
+                    style={[
+                        styles.container,
+                        { backgroundColor: backgroundColor ?? theme.colors.background },
+                    ]}
                     contentContainerStyle={[
                         styles.content,
                         {

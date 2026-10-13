@@ -30,6 +30,7 @@ function inboxItem(overrides: Partial<InboxItem> = {}): InboxItem {
     return {
         ...serverNotification(),
         server_id: 'server-1',
+        notification_id: null,
         pending: false,
         ...overrides,
     };
@@ -41,6 +42,7 @@ function persisted(overrides: Partial<PersistedInbox> = {}): PersistedInbox {
         items: [],
         hydrated: false,
         updatedAt: '2026-09-10T00:00:00.000Z',
+        watermark: null,
         ...overrides,
     };
 }
@@ -130,6 +132,125 @@ describe('mergeServerPage', () => {
         expect(next.items.map(item => item.id)).toEqual(['server-1']);
     });
 
+    it('collapses a push row into its server twin on the canonical id', () => {
+        // A push materialised the row with the backend id already known.
+        const pushRow = fromPushPayload(
+            { type: 'roster.published', roster_id: 9, notification_id: 'server-1', title: 'Roster' },
+            { id: 'push:delivery' },
+        );
+        const local = persisted({ items: [pushRow] });
+
+        const next = mergeServerPage(local, [serverNotification({ id: 'server-1' })]);
+
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0]?.id).toBe('server-1');
+        expect(next.items[0]?.pending).toBe(false);
+    });
+
+    it('does not duplicate a notification the server page itself repeats', () => {
+        const next = mergeServerPage(persisted(), [
+            serverNotification({ id: 'server-1' }),
+            serverNotification({ id: 'server-1' }),
+        ]);
+
+        expect(next.items).toHaveLength(1);
+    });
+
+    it('collapses a push row into its server twin when the payload is a subset (real backend shape)', () => {
+        /*
+         * REGRESSION GUARD for the reported "2 rows for 1 event" defect.
+         *
+         * The backend FCM payload carries only the routing keys and NO `notification_id`:
+         *   { type: 'shift.assigned', shift_id: 42 }
+         * The server row's `data` is the full `toArray()` bag — a strict superset:
+         *   { type, shift_id, date, start_time, end_time, title, body }
+         * The old identity check required identical key counts, so the two never matched
+         * and the push row survived beside the server row.
+         */
+        const pushRow = fromPushPayload(
+            { type: 'shift.assigned', shift_id: 42, title: 'New shift assigned', body: 'Monday' },
+            { id: 'push:type=shift.assigned&shift_id=42' },
+        );
+        const local = persisted({ items: [pushRow] });
+
+        const next = mergeServerPage(local, [
+            serverNotification({
+                id: 'server-1',
+                type: 'shift.assigned',
+                data: {
+                    type: 'shift.assigned',
+                    shift_id: 42,
+                    date: '2026-09-14',
+                    start_time: '09:00',
+                    end_time: '17:00',
+                    title: 'New shift assigned',
+                    body: 'Monday',
+                },
+            }),
+        ]);
+
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0]?.id).toBe('server-1');
+        expect(next.items[0]?.pending).toBe(false);
+    });
+
+    it('collapses a push row that carries a transport-only dedupe_key', () => {
+        /*
+         * The backend's FCM channel adds `dedupe_key` to the push data at send time, but
+         * the server row's `data` (from `toArray()`) never contains it. Leaving it in the
+         * business bag made the push a non-subset of the server row, so the two failed to
+         * match and one event produced two rows.
+         */
+        const pushRow = fromPushPayload(
+            {
+                type: 'roster.published',
+                roster_id: 9,
+                dedupe_key: 'roster:9:v4:emp:7',
+                title: 'Roster published',
+                body: 'Ready.',
+            },
+            { id: 'push:roster-9' },
+        );
+        const local = persisted({ items: [pushRow] });
+
+        const next = mergeServerPage(local, [
+            serverNotification({
+                id: 'server-1',
+                type: 'roster.published',
+                data: {
+                    type: 'roster.published',
+                    roster_id: 9,
+                    week_start: '2026-09-14',
+                    week_end: '2026-09-20',
+                    title: 'Roster published',
+                    body: 'Ready.',
+                },
+            }),
+        ]);
+
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0]?.id).toBe('server-1');
+    });
+
+    it('does not collapse two different events of the same type', () => {
+        const pushRow = fromPushPayload(
+            { type: 'shift.assigned', shift_id: 42, title: 'Shift' },
+            { id: 'push:shift-42' },
+        );
+        const local = persisted({ items: [pushRow] });
+
+        // A different shift id is a different event and must survive as its own row.
+        const next = mergeServerPage(local, [
+            serverNotification({
+                id: 'server-99',
+                type: 'shift.assigned',
+                data: { type: 'shift.assigned', shift_id: 99, date: '2026-09-15' },
+            }),
+        ]);
+
+        expect(next.items).toHaveLength(2);
+    });
+
     it('sorts newest first', () => {
         const next = mergeServerPage(
             persisted(),
@@ -157,9 +278,37 @@ describe('fromPushPayload', () => {
             body: 'Monday',
             read_at: null,
             server_id: null,
+            notification_id: null,
             pending: true,
         });
         expect(item.data).toEqual({ type: 'shift.assigned', shift_id: 42 });
+    });
+
+    it('adopts the canonical notification_id as the row identity', () => {
+        const item = fromPushPayload(
+            {
+                type: 'shift.assigned',
+                shift_id: 42,
+                notification_id: 'ntf-9',
+                title: 'Shift assigned',
+                body: 'Monday',
+            },
+            { id: 'push:whatever' },
+        );
+
+        // The backend id wins over the caller's fallback id, and the row is no longer
+        // "pending" because the server already owns it.
+        expect(item.id).toBe('ntf-9');
+        expect(item.server_id).toBe('ntf-9');
+        expect(item.notification_id).toBe('ntf-9');
+        expect(item.pending).toBe(false);
+    });
+
+    it('accepts a numeric notification_id from the wire', () => {
+        const item = fromPushPayload({ type: 'leave.decided', notification_id: 17 }, { id: 'push:x' });
+
+        expect(item.notification_id).toBe('17');
+        expect(item.id).toBe('17');
     });
 
     it('falls back to a generic title when the payload has none', () => {
@@ -208,6 +357,61 @@ describe('upsertItem', () => {
 
         expect(next.items).toHaveLength(1);
         expect(next.items[0]?.read_at).toBe('2026-09-10T09:00:00.000Z');
+    });
+
+    it('is idempotent for repeated delivery of the same notification_id', () => {
+        // Two deliveries of one event, each with a different local fallback id (as FCM
+        // assigns a fresh messageId per delivery) but the same canonical backend id.
+        const first = fromPushPayload(
+            { type: 'roster.published', roster_id: 9, notification_id: 'ntf-9', title: 'Roster' },
+            { id: 'push:delivery-1' },
+        );
+        const second = fromPushPayload(
+            { type: 'roster.published', roster_id: 9, notification_id: 'ntf-9', title: 'Roster' },
+            { id: 'push:delivery-2' },
+        );
+
+        const inbox = upsertItem(persisted(), first);
+        const next = upsertItem(inbox, second);
+
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0]?.id).toBe('ntf-9');
+    });
+
+    it('does not resurrect a read row when the same notification is redelivered', () => {
+        const read = inboxItem({ notification_id: 'ntf-9', server_id: 'ntf-9', read_at: '2026-09-10T09:00:00.000Z' });
+        const redelivered = fromPushPayload(
+            { type: 'shift.assigned', shift_id: 42, notification_id: 'ntf-9', title: 'Shift' },
+            { id: 'push:again' },
+        );
+
+        const next = upsertItem(persisted({ items: [read] }), redelivered);
+
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0]?.read_at).toBe('2026-09-10T09:00:00.000Z');
+    });
+
+    it('does not downgrade a server-confirmed row when a pending push arrives for it', () => {
+        // The server already confirmed the event (superset data, real server id).
+        const confirmed = inboxItem({
+            id: 'server-1',
+            server_id: 'server-1',
+            notification_id: 'server-1',
+            pending: false,
+            type: 'shift.assigned',
+            data: { type: 'shift.assigned', shift_id: 42, date: '2026-09-14' },
+        });
+        // A late/duplicate push for the same event (subset data, no server id).
+        const push = fromPushPayload(
+            { type: 'shift.assigned', shift_id: 42, title: 'Shift' },
+            { id: 'push:late' },
+        );
+
+        const next = upsertItem(persisted({ items: [confirmed] }), push);
+
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0]?.id).toBe('server-1');
+        expect(next.items[0]?.pending).toBe(false);
     });
 });
 

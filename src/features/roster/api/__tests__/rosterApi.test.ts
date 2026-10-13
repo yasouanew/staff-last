@@ -42,7 +42,7 @@ function paginated(items: unknown[]) {
 /**
  * Pins the My Roster wire contract (spec Screen 5 API 1 + API 2):
  * - API 1: `GET /shifts?employee_id=&date_from=&date_to=&per_page=50` (tested in shiftsApi).
- * - API 2: `GET /rosters?status=published&per_page=10` for week chrome.
+ * - API 2: `GET /rosters?status=published&week_start=&week_end=&per_page=10` for week chrome.
  * - API 3: `GET /rosters/{id}` includes shifts; mobile filters to own client-side.
  *
  * Responses are parsed through [`rosterSchema`](../validation/apiSchemas.ts:1).
@@ -52,13 +52,23 @@ describe('rosterApi', () => {
         jest.clearAllMocks();
     });
 
-    it('lists published rosters for week chrome with status=published', async () => {
+    it('lists published rosters for week chrome scoped to the week window', async () => {
         mockedApi.get.mockResolvedValueOnce(paginated([makeRoster()]) as never);
 
-        await rosterApi.list({ status: 'published', per_page: 10 });
+        await rosterApi.list({
+            status: 'published',
+            week_start: '2026-09-14',
+            week_end: '2026-09-20',
+            per_page: 10,
+        });
 
         expect(mockedApi.get).toHaveBeenCalledWith('/rosters', {
-            params: { status: 'published', per_page: 10 },
+            params: {
+                status: 'published',
+                week_start: '2026-09-14',
+                week_end: '2026-09-20',
+                per_page: 10,
+            },
         });
     });
 

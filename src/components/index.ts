@@ -25,10 +25,13 @@ export {
     AppIcon,
     ArrowLeftGlyph,
     BellGlyph,
+    BellOffGlyph,
     BrandShieldGlyph,
     CalendarCheckGlyph,
     CalendarDaysGlyph,
     CalendarGlyph,
+    CalendarOffGlyph,
+    CheckCircleGlyph,
     CheckGlyph,
     ChevronDownGlyph,
     ChevronLeftGlyph,
@@ -42,6 +45,7 @@ export {
     MailCheckGlyph,
     MapPinGlyph,
     NoteGlyph,
+    PaperclipGlyph,
     PlusGlyph,
     ShieldAlertGlyph,
     ShieldCheckGlyph,
@@ -72,7 +76,7 @@ export {
     type FloatingActionButtonProps,
 } from './FloatingActionButton';
 export { FormErrorPanel, type FormErrorPanelProps } from './FormErrorPanel';
-export { GreetingHeader, type GreetingHeaderProps } from './GreetingHeader';
+export { BentoStatCard, type BentoStatCardProps } from './BentoStatCard';
 export { LoadingView, type LoadingViewProps } from './LoadingView';
 export { NotificationBell, type NotificationBellProps } from './NotificationBell';
 export {
@@ -88,6 +92,7 @@ export {
     type PasswordStrengthState,
 } from './PasswordStrengthMeter';
 export { ScreenContainer, type ScreenContainerProps } from './ScreenContainer';
+export { ScreenHeader, type ScreenHeaderProps } from './ScreenHeader';
 export {
     SegmentedControl,
     type SegmentedControlProps,
@@ -95,7 +100,6 @@ export {
 } from './SegmentedControl';
 export {
     RosterSkeleton,
-    SHIFT_ROW_HEIGHT,
     SkeletonCard,
     SkeletonCircle,
     SkeletonDayStrip,
@@ -121,6 +125,23 @@ export {
     type StatusScaffoldTone,
 } from './StatusScaffold';
 export { StickyActionTray, type StickyActionTrayProps } from './StickyActionTray';
-export { SummaryHeroCard, type SummaryHeroCardProps } from './SummaryHeroCard';
-export { TabBarItem, type TabBarItemProps } from './TabBarItem';
+export { ShiftCard, SHIFT_ROW_HEIGHT } from './ShiftCard';
+export {
+    TabBar,
+    TAB_BAR_HEIGHT,
+    TabBarItem,
+    type TabBarItemModel,
+    type TabBarItemProps,
+    type TabBarProps,
+} from './TabBar';
+export { Toast, type ToastProps } from './Toast';
 export { WeekDayStrip, type WeekDay, type WeekDayStripProps } from './WeekDayStrip';
+
+/* ---- Auth-surface UI primitives (2026 spec) ---- */
+export {
+    PrimaryButton,
+    TextField,
+    type PrimaryButtonProps,
+    type TextFieldProps,
+    type TextFieldRef,
+} from './ui';

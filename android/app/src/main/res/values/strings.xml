@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">StaffSaaSMobile</string>
+    <string name="app_name">Rosta</string>
 
     <!--
       FCM fallback channel. Referenced by the `default_notification_channel_id`

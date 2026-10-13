@@ -1,19 +1,27 @@
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
-import { AppHeader } from '../../../components/AppHeader';
+import { AppIcon } from '../../../components/AppIcon';
+import { BellOffGlyph } from '../../../components/AppIcon/glyphs';
 import { AppText } from '../../../components/AppText';
-import { EmptyState } from '../../../components/EmptyState';
 import { ErrorView } from '../../../components/ErrorView';
-import { SkeletonRows } from '../../../components/Skeleton';
 import { ScreenContainer } from '../../../components/ScreenContainer';
-import { spacing, useTheme } from '../../../theme';
-import { formatRelative } from '../../../utils/date';
+import { ScreenHeader } from '../../../components/ScreenHeader';
+import { SkeletonRows } from '../../../components/Skeleton';
+import { useTheme } from '../../../theme/useTheme';
 import { useInbox, useMarkAllNotificationsRead, useMarkNotificationRead } from '../hooks';
+import { NotificationCard } from '../components';
 import type { InboxItem } from '../utils/inboxMerge';
+import { routeForNotification } from '../utils/notificationRouting';
 
 type Props = {
-    navigation: { goBack: () => void };
+    navigation: {
+        goBack: () => void;
+        navigate: (name: string, params?: object) => void;
+    };
 };
+
+/** The spec's empty-state mark. */
+const EMPTY_ICON_SIZE = 56;
 
 /**
  * Notifications (spec Screen 10).
@@ -35,6 +43,13 @@ type Props = {
  * nothing to show *and* the request failed. When rows exist but the sync is stale, a
  * quiet banner is shown instead — a stale notification list is still useful, and
  * replacing it with a full-screen retry prompt would hide information the user needs.
+ *
+ * ## Typed feed
+ *
+ * Each card is a [`NotificationCard`](src/features/notifications/components/NotificationCard.tsx:1),
+ * which differentiates roster/shift events from leave events by icon and tile colour,
+ * and renders a clear read/unread state. Tapping a card marks it read and routes to
+ * the relevant screen via [`routeForNotification`](src/features/notifications/utils/notificationRouting.ts:1).
  */
 export function NotificationsScreen({ navigation }: Props): React.JSX.Element {
     const theme = useTheme();
@@ -46,10 +61,19 @@ export function NotificationsScreen({ navigation }: Props): React.JSX.Element {
     const hasUnread = notifications.some(item => item.read_at === null);
     const showErrorState = inbox.isStale && notifications.length === 0 && !inbox.isInitialLoading;
 
+    const handleOpen = (item: InboxItem): void => {
+        if (item.read_at === null) {
+            markRead.mutate(item.id);
+        }
+
+        const route = routeForNotification(item.data);
+        navigation.navigate(route.screen, route.params);
+    };
+
     if (inbox.isInitialLoading) {
         return (
             <ScreenContainer hasHeader>
-                <AppHeader title="Notifications" onBack={() => navigation.goBack()} />
+                <ScreenHeader title="Notifications" onBack={() => navigation.goBack()} />
                 <SkeletonRows count={6} />
             </ScreenContainer>
         );
@@ -58,7 +82,7 @@ export function NotificationsScreen({ navigation }: Props): React.JSX.Element {
     if (showErrorState) {
         return (
             <ScreenContainer hasHeader>
-                <AppHeader title="Notifications" onBack={() => navigation.goBack()} />
+                <ScreenHeader title="Notifications" onBack={() => navigation.goBack()} />
                 <ErrorView
                     error={{
                         kind: 'network',
@@ -71,18 +95,18 @@ export function NotificationsScreen({ navigation }: Props): React.JSX.Element {
     }
 
     return (
-        <ScreenContainer hasHeader scrollable={false}>
-            <AppHeader
+        <ScreenContainer hasHeader scrollable={false} withGutter={false}>
+            <ScreenHeader
                 title="Notifications"
                 onBack={() => navigation.goBack()}
                 action={
                     hasUnread ? (
                         <Pressable
                             accessibilityRole="button"
+                            accessibilityLabel="Mark all read"
                             onPress={() => markAllRead.mutate()}
                             disabled={markAllRead.isPending}
-                            hitSlop={theme.spacing.sm}
-                        >
+                            hitSlop={theme.spacing.sm}>
                             <AppText variant="bodyStrong" color="textLink">
                                 Mark all read
                             </AppText>
@@ -94,28 +118,20 @@ export function NotificationsScreen({ navigation }: Props): React.JSX.Element {
             {inbox.isStale ? <SyncNotice /> : null}
 
             {notifications.length === 0 ? (
-                <EmptyState
-                    title="Nothing yet"
-                    description="Shift changes, roster updates and leave decisions will show up here."
-                />
+                <NotificationsEmptyState />
             ) : (
                 <FlatList
                     data={notifications}
                     keyExtractor={item => item.id}
+                    testID="notifications-list"
                     renderItem={({ item }) => (
-                        <NotificationRow
+                        <NotificationCard
                             notification={item}
-                            onPress={() => {
-                                if (item.read_at === null) {
-                                    markRead.mutate(item.id);
-                                }
-                            }}
+                            onPress={() => handleOpen(item)}
+                            testID={`notification-${item.id}`}
                         />
                     )}
-                    contentContainerStyle={[
-                        styles.list,
-                        { padding: theme.screenGutter, gap: theme.spacing.sm },
-                    ]}
+                    contentContainerStyle={styles.list}
                     refreshing={inbox.isRefetching}
                     onRefresh={inbox.retry}
                 />
@@ -139,15 +155,11 @@ function SyncNotice(): React.JSX.Element {
                 styles.notice,
                 {
                     backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                    borderRadius: theme.radius.md,
-                    marginHorizontal: theme.screenGutter,
-                    paddingHorizontal: theme.spacing.md,
-                    paddingVertical: theme.spacing.sm,
+                    borderColor: theme.tokens.colors.borderHairline,
+                    borderRadius: theme.tokens.radius.rMd,
                 },
             ]}
-            accessibilityRole="alert"
-        >
+            accessibilityRole="alert">
             <AppText variant="caption" color="textSecondary">
                 Showing notifications stored on this device. They will re-sync when you are back online.
             </AppText>
@@ -155,85 +167,46 @@ function SyncNotice(): React.JSX.Element {
     );
 }
 
-function NotificationRow({
-    notification,
-    onPress,
-}: {
-    notification: InboxItem;
-    onPress: () => void;
-}): React.JSX.Element {
-    const theme = useTheme();
-    const unread = notification.read_at === null;
-
+/**
+ * The zero-data state.
+ *
+ * A 56pt bell-off mark over a heading and a single explanatory line, centred with the
+ * spec's 120pt top margin. Deliberately not the shared `EmptyState`: that component
+ * carries a call to action, and there is nothing for the user to do here.
+ */
+function NotificationsEmptyState(): React.JSX.Element {
     return (
-        <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={unread ? `${notification.title}, unread` : notification.title}
-            onPress={onPress}
-            disabled={!unread}
-            style={[
-                styles.row,
-                {
-                    backgroundColor: unread ? theme.colors.primarySoft : theme.colors.surface,
-                    borderColor: theme.colors.border,
-                    borderRadius: theme.radius.md,
-                    borderWidth: 1,
-                    padding: theme.spacing.md,
-                    gap: theme.spacing.xxs,
-                },
-            ]}
-        >
-            <View style={styles.rowHeader}>
-                <AppText variant="bodyStrong" numberOfLines={1} style={styles.title}>
-                    {notification.title}
-                </AppText>
-                {notification.pending ? (
-                    <AppText variant="caption" color="textMuted">
-                        Queued
-                    </AppText>
-                ) : null}
-                {unread ? (
-                    <View
-                        style={[
-                            styles.dot,
-                            { backgroundColor: theme.colors.primary, borderRadius: theme.radius.full },
-                        ]}
-                        accessibilityLabel="Unread"
-                    />
-                ) : null}
-            </View>
-
-            <AppText variant="body" color="textSecondary">
-                {notification.body}
+        <View style={styles.empty} testID="notifications-empty">
+            <AppIcon icon={BellOffGlyph} sizePoints={EMPTY_ICON_SIZE} color="textMuted" />
+            <AppText variant="heading" color="text" align="center">
+                You're all caught up
             </AppText>
-
-            <AppText variant="caption" color="textMuted">
-                {formatRelative(notification.created_at)}
+            <AppText variant="body" color="textSecondary" align="center">
+                New roster and leave updates will appear here.
             </AppText>
-        </Pressable>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     list: {
-        paddingBottom: spacing.xxl,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 32,
+        gap: 12,
     },
     notice: {
+        marginHorizontal: 20,
+        marginTop: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
         borderWidth: 1,
     },
-    row: {
-        width: '100%',
-    },
-    rowHeader: {
+    empty: {
         alignItems: 'center',
-        flexDirection: 'row',
-        gap: spacing.xs,
-    },
-    title: {
-        flex: 1,
-    },
-    dot: {
-        height: 8,
-        width: 8,
+        justifyContent: 'center',
+        marginTop: 120,
+        paddingHorizontal: 20,
+        gap: 12,
     },
 });

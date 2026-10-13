@@ -1,0 +1,1 @@
+export { syncNotifications } from './syncNotifications';

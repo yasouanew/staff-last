@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 
 import { isSessionValidated, useSessionStore } from '../../features/auth/store/sessionStore';
 import { usePreferencesStore } from '../../features/settings/store/preferencesStore';
+import { useConnectivityStore } from '../connectivity/connectivityStore';
 import { refreshPermissionStatus, registerDevice } from './pushService';
 import { isPushHealthy, usePushStatusStore, type PushPermissionStatus, type PushRegistrationStatus } from './pushStatusStore';
 
@@ -93,6 +94,18 @@ export function usePushStatus(): PushStatus {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, pushEnabled]);
+
+    // Re-read OS permission when the device comes back online. The connectivity
+    // coordinator owns registration and reconciliation; this only keeps the *permission*
+    // display honest, which the AppState listener cannot do for a device that stayed in
+    // the foreground throughout the outage.
+    const isOnline = useConnectivityStore(state => state.isOnline);
+
+    useEffect(() => {
+        if (isOnline) {
+            void refreshPermissionStatus();
+        }
+    }, [isOnline]);
 
     return {
         permission,

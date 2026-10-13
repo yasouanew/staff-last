@@ -9,9 +9,10 @@ import { createGradients } from './gradients';
 import { haptics } from './haptics';
 import { motion } from './motion';
 import { radius, radiusRoles, componentRadius } from './radius';
-import { shadows, elevationSpecs, darkElevation } from './shadows';
+import { shadows, shadowsFor, elevationSpecs, darkElevation, type ShadowSet } from './shadows';
 import { sizing } from './sizing';
-import { spacing, screenGutter, insets, GRID_UNIT } from './spacing';
+import { spacing, screenGutter, screenPadding, space, insets, GRID_UNIT } from './spacing';
+import { tokensFor, type ThemeTokens } from './tokens';
 import { typography } from './typography';
 
 /**
@@ -47,7 +48,11 @@ import { typography } from './typography';
 const sharedTokens = {
     palette,
     spacing,
+    /** The 2026 spec's 4pt-grid scale (`space.md` = 12, `space.lg` = 16). */
+    space,
     screenGutter,
+    /** Global horizontal screen padding — the 2026 spec's 20pt gutter. */
+    screenPadding,
     insets,
     gridUnit: GRID_UNIT,
     radius,
@@ -75,14 +80,32 @@ function createTheme(scheme: ColorSchemeName, colors: Colors): {
     scheme: ColorSchemeName;
     isDark: boolean;
     colors: Colors;
+    /** The complete 2026 design-token set for this scheme. */
+    tokens: ThemeTokens;
     darkElevation: typeof darkElevation;
     gradients: ReturnType<typeof createGradients>;
-} & typeof sharedTokens {
+    /** Scheme-specific elevation — zeroed in dark mode. */
+    shadows: ShadowSet;
+} & Omit<typeof sharedTokens, 'shadows'> {
     return {
         scheme,
         isDark: scheme === 'dark',
         colors,
         ...sharedTokens,
+        /**
+         * Elevation is scheme-specific: light mode casts soft shadows, dark mode
+         * zeroes them and relies on a hairline border instead. Overriding the
+         * shared (light) `shadows` here is what makes `theme.shadows[elevated]`
+         * correct in both schemes without a branch at the call site.
+         */
+        shadows: shadowsFor(scheme),
+        /**
+         * The 2026 design-token set, assembled for this scheme. Exposed alongside
+         * the legacy token views so a component can read either the new names
+         * (`theme.tokens.colors.inkPrimary`) or the existing ones
+         * (`theme.colors.text`) from the same object.
+         */
+        tokens: tokensFor(scheme),
         /**
          * Gradient presets are built *from this scheme's* colour tokens, so they
          * re-tint automatically in dark mode. Built inside the factory rather than

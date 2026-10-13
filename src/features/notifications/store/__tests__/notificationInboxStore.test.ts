@@ -19,8 +19,10 @@ describe('notificationInboxStore', () => {
         useNotificationInboxStore.setState({
             items: [],
             hydrated: false,
+            loaded: false,
             userId: null,
             synced: false,
+            watermark: null,
         });
     });
 
@@ -69,6 +71,54 @@ describe('notificationInboxStore', () => {
         await useNotificationInboxStore.getState().markRead('push:1');
 
         expect(useNotificationInboxStore.getState().items[0]?.read_at).not.toBeNull();
+    });
+
+    it('does not wipe stored rows when a push arrives before hydration (headless launch)', async () => {
+        // A previous session persisted a row.
+        await AsyncStorage.setItem(
+            STORAGE_KEYS.notificationInbox,
+            JSON.stringify({
+                userId: 7,
+                items: [{ ...serverItem, server_id: 'server-1', notification_id: 'server-1', pending: false }],
+                hydrated: true,
+                updatedAt: '2026-09-10T00:00:00.000Z',
+                watermark: null,
+            }),
+        );
+
+        // A fresh headless process: in-memory state is empty and `loaded` is false.
+        useNotificationInboxStore.setState({
+            items: [],
+            hydrated: false,
+            loaded: false,
+            userId: null,
+            synced: false,
+            watermark: null,
+        });
+
+        await useNotificationInboxStore.getState().receivePush(
+            { type: 'roster.published', roster_id: 9, notification_id: 'server-2', title: 'Roster' },
+            'push:2',
+        );
+
+        const items = useNotificationInboxStore.getState().items;
+
+        // The stored row survived and the new push was added — not a one-row inbox.
+        expect(items).toHaveLength(2);
+        expect(items.map(item => item.id).sort()).toEqual(['server-1', 'server-2']);
+    });
+
+    it('is idempotent when the same notification_id is received twice', async () => {
+        await useNotificationInboxStore.getState().receivePush(
+            { type: 'roster.published', roster_id: 9, notification_id: 'server-2', title: 'Roster' },
+            'push:delivery-1',
+        );
+        await useNotificationInboxStore.getState().receivePush(
+            { type: 'roster.published', roster_id: 9, notification_id: 'server-2', title: 'Roster' },
+            'push:delivery-2',
+        );
+
+        expect(useNotificationInboxStore.getState().items).toHaveLength(1);
     });
 
     it('resets to an empty inbox', async () => {

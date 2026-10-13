@@ -10,6 +10,7 @@
 const esmPackages = [
   '@react-navigation',
   '@react-native-async-storage',
+  '@react-native-community/netinfo',
   '@react-native-firebase',
   '@notifee',
   'react-native-safe-area-context',
@@ -63,6 +64,10 @@ module.exports = {
     // AsyncStorage resolves to a native TurboModule that does not exist under Jest, so
     // any test touching the persisted notification inbox needs an in-memory store.
     '^@react-native-async-storage/async-storage$': '<rootDir>/jest/async-storage.mock.js',
+    // NetInfo resolves to a native TurboModule that does not exist under Jest. The
+    // mock exposes a controllable listener so connectivity-transition tests can drive
+    // an offline → online edge deterministically.
+    '^@react-native-community/netinfo$': '<rootDir>/jest/netinfo.mock.js',
     // Keychain is a native module with no TurboModule under Jest. The credential
     // store is security-relevant, so the mock is a real in-memory keychain rather
     // than stubs — the token-store tests assert on what actually got persisted.

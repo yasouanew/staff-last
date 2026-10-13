@@ -1,5 +1,6 @@
 import type { Availability } from '../../types';
 import {
+    TIME_OPTIONS,
     buildSyncPayload,
     isWeekDirty,
     orderAvailability,
@@ -104,5 +105,45 @@ describe('availabilityWeek', () => {
                 original.map(d => (d.day_of_week === 1 ? { ...d, is_available: false } : d)),
             ),
         ).toBe(true);
+    });
+});
+
+/**
+ * The select's option set is the contract that replaced free-text entry: every
+ * value it offers must already be a legal `HH:MM` time, so a selection can never
+ * fail validation. These tests pin the boundaries and the step.
+ */
+describe('TIME_OPTIONS', () => {
+    it('covers the whole day in 30-minute steps', () => {
+        expect(TIME_OPTIONS).toHaveLength(48);
+        expect(TIME_OPTIONS[0]).toBe('00:00');
+        expect(TIME_OPTIONS[1]).toBe('00:30');
+        expect(TIME_OPTIONS[TIME_OPTIONS.length - 1]).toBe('23:30');
+    });
+
+    it('offers only values the validator accepts', () => {
+        for (const option of TIME_OPTIONS) {
+            const result = validateSlotTime(option, '23:30', true);
+            if (option === '23:30') {
+                // Same time is not "after", but the format itself is accepted.
+                expect(result).toBe('End time must be after start time.');
+            } else {
+                expect(result).toBeNull();
+            }
+        }
+    });
+});
+
+describe('validateSlotTime half-filled ranges', () => {
+    it('rejects a start time with no end time', () => {
+        expect(validateSlotTime('09:00', null, true)).toBe('Set both start and end times.');
+    });
+
+    it('rejects an end time with no start time', () => {
+        expect(validateSlotTime(null, '17:00', true)).toBe('Set both start and end times.');
+    });
+
+    it('still accepts the deliberate all-day state (both blank)', () => {
+        expect(validateSlotTime(null, null, true)).toBeNull();
     });
 });

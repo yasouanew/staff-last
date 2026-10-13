@@ -4,6 +4,7 @@ import {
     formatRelativeTimestamp,
     formatYmd,
     monthLong,
+    monthShort,
     weekdayLong,
     weekdayShort,
 } from '../i18n/format';
@@ -134,6 +135,22 @@ export function formatDayMonth(value: string): string {
 /** Short weekday name for a `Y-m-d` value, e.g. `"Mon"`. */
 export function getWeekdayShort(value: string): string {
     return weekdayShort(parseApiDate(value));
+}
+
+/** Short month name for a `Y-m-d` value, e.g. `"Sep"`. */
+export function getMonthShort(value: string): string {
+    return monthShort(parseApiDate(value));
+}
+
+/**
+ * Day-of-month number for a `Y-m-d` value, e.g. `"21"`.
+ *
+ * Returned as a string so a week-strip cell can render it directly without a
+ * second `String(...)` at the call site. Derived from the parsed local-midnight
+ * `Date` (never `new Date(value)`, which would parse as UTC and shift the day).
+ */
+export function getDayOfMonth(value: string): string {
+    return String(parseApiDate(value).getDate());
 }
 
 /** Long weekday name for an employee week index (`0 = Sunday`). */

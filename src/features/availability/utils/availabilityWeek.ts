@@ -10,6 +10,21 @@ export type WeekDayDraft = {
 
 export const WEEK_DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
 
+/**
+ * The selectable clock times, in 30-minute steps from `00:00` to `23:30`.
+ *
+ * The option *values* are the API's interchange format (`HH:MM`, 24-hour), so a
+ * selection can be handed straight to the reducer, the validator and the sync
+ * payload with no parsing at the seam. 30 minutes is the granularity the roster
+ * uses for shift boundaries, so every valid start/end is representable without
+ * the user typing — which is the whole point of replacing the free-text field.
+ */
+export const TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, index) => {
+    const hours = Math.floor(index / 2);
+    const minutes = index % 2 === 0 ? '00' : '30';
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+});
+
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function toMinutes(value: string): number {
@@ -19,10 +34,16 @@ function toMinutes(value: string): number {
 
 export function validateSlotTime(start: string | null, end: string | null, isAvailable: boolean): string | null {
     if (!isAvailable) return null;
+    // Both blank is the deliberate "available all day" state, not an error.
     if (start == null && end == null) return null;
-    if (start != null && !TIME_RE.test(start)) return 'Use HH:MM 24-hour format.';
-    if (end != null && !TIME_RE.test(end)) return 'Use HH:MM 24-hour format.';
-    if (start != null && end != null && toMinutes(end) <= toMinutes(start)) {
+    // A half-filled range is incomplete: the user has started defining hours but
+    // not finished, so the day cannot be saved. Without this the week would be
+    // considered valid with only a start time, and the save button would enable
+    // on a range the backend rejects.
+    if (start == null || end == null) return 'Set both start and end times.';
+    if (!TIME_RE.test(start)) return 'Use HH:MM 24-hour format.';
+    if (!TIME_RE.test(end)) return 'Use HH:MM 24-hour format.';
+    if (toMinutes(end) <= toMinutes(start)) {
         return 'End time must be after start time.';
     }
     return null;
@@ -79,15 +100,36 @@ export function buildSyncPayload(drafts: WeekDayDraft[]): AvailabilitySlotInput[
     });
 }
 
-export function isWeekDirty(original: WeekDayDraft[], current: WeekDayDraft[]): boolean {
-    if (original.length !== current.length) return true;
-    return original.some((o, i) => {
-        const c = current[i];
-        if (!c) return true;
+export function isWeekDirty(
+    original: WeekDayDraft[],
+    current: WeekDayDraft[],
+): boolean {
+    if (original.length !== current.length) {
+        return true;
+    }
+
+    const normalizeTime = (value: string | null | undefined): string | null => {
+        if (value === undefined || value === '') {
+            return null;
+        }
+
+        return value;
+    };
+
+    return original.some((originalDay, index) => {
+        const currentDay = current[index];
+
+        if (!currentDay) {
+            return true;
+        }
+
         return (
-            o.is_available !== c.is_available ||
-            (o.start_time ?? null) !== (c.start_time ?? null) ||
-            (o.end_time ?? null) !== (c.end_time ?? null)
+            originalDay.day_of_week !== currentDay.day_of_week ||
+            originalDay.is_available !== currentDay.is_available ||
+            normalizeTime(originalDay.start_time) !==
+            normalizeTime(currentDay.start_time) ||
+            normalizeTime(originalDay.end_time) !==
+            normalizeTime(currentDay.end_time)
         );
     });
 }

@@ -35,6 +35,19 @@ export const INBOX_MAX_ITEMS = 200;
 export type InboxItem = AppNotification & {
     server_id: string | null;
     pending: boolean;
+    /**
+     * The backend `notifications` id this row represents — the **canonical identity**.
+     *
+     * The backend puts it in the FCM data bag as `notification_id` (see
+     * [`FcmMessage`](../staff-sass-last17/app/Notifications/Messages/FcmMessage.php:1)),
+     * and a server row carries the same value as its `id`. Because both sources agree on
+     * it, a push-materialised row and its server twin collapse to one row regardless of
+     * which delivery path produced them.
+     *
+     * `null` only for a legacy payload that predates the field; those fall back to the
+     * business-key match in [`isSameNotification`](src/features/notifications/utils/inboxMerge.ts:1).
+     */
+    notification_id: string | null;
 };
 
 export type PersistedInbox = {
@@ -44,11 +57,66 @@ export type PersistedInbox = {
     /** `false` until the first successful `GET /notifications` for this user. */
     hydrated: boolean;
     updatedAt: string;
+    /**
+     * High-water mark for server reconciliation.
+     *
+     * The newest `created_at` this device has observed from the server. On reconnect
+     * the client asks for notifications created *after* this instant, so a device that
+     * was offline for a week fetches only the gap rather than the whole feed. `null`
+     * until the first successful sync, which is the signal to request the first page
+     * without a cursor.
+     */
+    watermark: string | null;
 };
 
 /** An inbox owned by nobody, used as the reset value on sign-out. */
 export function emptyInbox(): PersistedInbox {
-    return { userId: null, items: [], hydrated: false, updatedAt: new Date(0).toISOString() };
+    return {
+        userId: null,
+        items: [],
+        hydrated: false,
+        updatedAt: new Date(0).toISOString(),
+        watermark: null,
+    };
+}
+
+/**
+ * The newest `created_at` across a set of rows, or `null` when there are none.
+ *
+ * Used to advance the reconciliation watermark. Invalid dates are ignored rather than
+ * poisoning the comparison, so one malformed row cannot pin the cursor in the past.
+ */
+export function latestCreatedAt(items: readonly { created_at: string }[]): string | null {
+    let latest: string | null = null;
+    let latestMs = Number.NEGATIVE_INFINITY;
+
+    for (const item of items) {
+        const ms = Date.parse(item.created_at);
+
+        if (Number.isNaN(ms)) {
+            continue;
+        }
+
+        if (ms > latestMs) {
+            latestMs = ms;
+            latest = item.created_at;
+        }
+    }
+
+    return latest;
+}
+
+/** Returns whichever of two ISO timestamps is newer; `null` loses to any value. */
+function newerOf(a: string | null, b: string | null): string | null {
+    if (a === null) {
+        return b;
+    }
+
+    if (b === null) {
+        return a;
+    }
+
+    return Date.parse(b) > Date.parse(a) ? b : a;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,6 +163,8 @@ export function deserializeInbox(raw: unknown): PersistedInbox {
             read_at: typeof candidate.read_at === 'string' ? candidate.read_at : null,
             created_at: createdAt,
             server_id: typeof candidate.server_id === 'string' ? candidate.server_id : null,
+            notification_id:
+                typeof candidate.notification_id === 'string' ? candidate.notification_id : null,
             pending: candidate.pending === true,
         });
     }
@@ -104,6 +174,7 @@ export function deserializeInbox(raw: unknown): PersistedInbox {
         items,
         hydrated: raw.hydrated === true,
         updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date(0).toISOString(),
+        watermark: typeof raw.watermark === 'string' ? raw.watermark : null,
     };
 }
 
@@ -130,7 +201,74 @@ function cap(items: InboxItem[]): InboxItem[] {
  * is matched on the notification `id` when the backend sent one, and otherwise on
  * `type` + `data` contents, which is stable across both sources.
  */
+/**
+ * The business fields of a payload, with transport-only keys removed.
+ *
+ * Two keys are stripped because they are **not** part of the server row's `data` and
+ * would otherwise make the push bag a non-subset of the server bag, defeating the
+ * identity match:
+ *
+ * - `type` — a push-materialised row keeps it inside `data` (the backend puts it there
+ *   so a data-only message is self-describing), whereas a server row carries `type` as a
+ *   first-class field and omits it from `data`. It is compared separately.
+ * - `dedupe_key` — added by the backend's FCM channel at send time
+ *   ([`FcmChannel::deliver()`](../staff-sass-last17/app/Notifications/Channels/FcmChannel.php:1))
+ *   and never written to the database row. Leaving it in was the reason a push row and
+ *   its server twin still failed to match after the subset fix.
+ */
+function businessData(data: Record<string, unknown>): Record<string, unknown> {
+    const rest: Record<string, unknown> = { ...data };
+
+    delete rest.type;
+    delete rest.dedupe_key;
+
+    return rest;
+}
+
+/**
+ * Reads the canonical backend notification id out of a payload.
+ *
+ * The backend puts it in the FCM data bag as `notification_id`; a server row carries it
+ * as `id`. FCM data values are strings on the wire, but a numeric value is accepted too
+ * so a payload that serialised the id as a number is not silently treated as legacy.
+ */
+export function notificationIdFromData(data: Record<string, unknown>): string | null {
+    const value = data.notification_id;
+
+    if (typeof value === 'string' && value.length > 0) {
+        return value;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return String(value);
+    }
+
+    return null;
+}
+
+/**
+ * Identity match for two inbox rows.
+ *
+ * Order matters, and it is deliberate:
+ *
+ * 1. **Canonical id** — the backend `notification_id` is identical on the push payload
+ *    and the server row, so it is the only match guaranteed stable across delivery
+ *    paths. This is what makes a redelivered FCM message, a tap, and a later server
+ *    sync all resolve to one row.
+ * 2. **Cross server id** — a row that knows the other's backend id.
+ * 3. **Local id** — the same materialised row.
+ * 4. **Business key** — a legacy fallback for a payload without `notification_id`:
+ *    same `type` and identical business `data`.
+ *
+ * Two rows that both carry a `server_id` are distinct notifications even when their
+ * business data collides — the id is authoritative, and treating them as one would
+ * silently delete a notification.
+ */
 function isSameNotification(a: InboxItem, b: InboxItem): boolean {
+    if (a.notification_id !== null && a.notification_id === b.notification_id) {
+        return true;
+    }
+
     if (a.server_id !== null && a.server_id === b.id) {
         return true;
     }
@@ -143,18 +281,39 @@ function isSameNotification(a: InboxItem, b: InboxItem): boolean {
         return true;
     }
 
+    if (a.server_id !== null && b.server_id !== null) {
+        return false;
+    }
+
     if (a.type !== b.type) {
         return false;
     }
 
-    const aKeys = Object.keys(a.data);
-    const bKeys = Object.keys(b.data);
+    /*
+     * Business-key match, as a **subset** test.
+     *
+     * The FCM payload carries only the routing keys (`type` + `shift_id`/`roster_id`/
+     * `leave_request_id`), while the server row's `data` is the full `toArray()` bag —
+     * a strict superset (it adds `date`, `start_time`, `week_start`, `title`, `body`,
+     * …). Requiring identical key counts therefore never matched the two, which is
+     * exactly why one event produced two rows: the push row survived and the server
+     * row was added beside it.
+     *
+     * Matching the smaller bag against the larger one is correct by construction: the
+     * push payload is always a subset of the server data, and two different events of
+     * the same type still differ on their business id (`shift_id`/`roster_id`/…).
+     */
+    const aData = businessData(a.data);
+    const bData = businessData(b.data);
+    const [smaller, larger] =
+        Object.keys(aData).length <= Object.keys(bData).length ? [aData, bData] : [bData, aData];
+    const keys = Object.keys(smaller);
 
-    if (aKeys.length === 0 || aKeys.length !== bKeys.length) {
+    if (keys.length === 0) {
         return false;
     }
 
-    return aKeys.every(key => String(a.data[key]) === String(b.data[key]));
+    return keys.every(key => key in larger && String(smaller[key]) === String(larger[key]));
 }
 
 /**
@@ -173,6 +332,7 @@ export function mergeServerPage(
     const serverRows: InboxItem[] = serverItems.map(item => ({
         ...item,
         server_id: item.id,
+        notification_id: item.id,
         pending: false,
     }));
 
@@ -197,11 +357,26 @@ export function mergeServerPage(
         survivors.push(row);
     }
 
+    // A server page can itself contain the same notification twice (a paginated overlap,
+    // or a backend that returns one row under two ids). Collapse on the canonical id so
+    // the merge cannot introduce a duplicate the server did not mean to send.
+    const dedupedServerRows: InboxItem[] = [];
+
+    for (const row of serverRows) {
+        if (!dedupedServerRows.some(existing => isSameNotification(existing, row))) {
+            dedupedServerRows.push(row);
+        }
+    }
+
     return {
         ...current,
-        items: cap([...serverRows, ...survivors].sort(byNewestFirst)),
+        items: cap([...dedupedServerRows, ...survivors].sort(byNewestFirst)),
         hydrated: true,
         updatedAt: new Date().toISOString(),
+        // Advance the cursor to the newest row the server has shown us. A page with no
+        // rows leaves the existing watermark untouched, so an empty poll cannot rewind
+        // the cursor and cause the next sync to re-fetch everything.
+        watermark: newerOf(current.watermark, latestCreatedAt(dedupedServerRows)),
     };
 }
 
@@ -218,21 +393,28 @@ export function fromPushPayload(
     options: { id: string; now?: Date },
 ): InboxItem {
     const createdAt = (options.now ?? new Date()).toISOString();
+    const notificationId = notificationIdFromData(data);
 
     const readData: Record<string, unknown> = { ...data };
     delete readData.title;
     delete readData.body;
 
     return {
-        id: options.id,
+        // The canonical backend id is the row identity whenever the payload carries it,
+        // so a push row and its server twin are literally the same key. The caller's
+        // `id` is only a fallback for a legacy payload without `notification_id`.
+        id: notificationId ?? options.id,
         type: typeof data.type === 'string' ? data.type : 'unknown',
         title: typeof data.title === 'string' ? data.title : 'New notification',
         body: typeof data.body === 'string' ? data.body : '',
         data: readData,
         read_at: null,
         created_at: createdAt,
-        server_id: null,
-        pending: true,
+        // Knowing the backend id means the server already owns this row, so it is not
+        // "pending" — it is the same record the next sync will return.
+        server_id: notificationId,
+        notification_id: notificationId,
+        pending: notificationId === null,
     };
 }
 
@@ -247,21 +429,29 @@ export function fromPushPayload(
  * that id alone.
  */
 export function upsertItem(current: PersistedInbox, item: InboxItem): PersistedInbox {
-    const withoutItem = current.items.filter(existing => {
-        if (existing.id === item.id) {
-            return false;
-        }
+    const existing = current.items.find(candidate => isSameNotification(candidate, item));
 
-        if (existing.server_id !== null && item.server_id !== null) {
-            return existing.server_id !== item.server_id;
-        }
+    let next = item;
 
-        return !isSameNotification(existing, item);
-    });
+    if (existing !== undefined) {
+        // A push must never downgrade a server-confirmed row. The server is the source
+        // of truth, so when a pending push arrives for an event the server already
+        // confirmed, the confirmed row wins and the push is absorbed.
+        if (existing.server_id !== null && item.server_id === null) {
+            next = existing;
+        } else if (existing.read_at !== null && item.read_at === null) {
+            // A redelivered push must not resurrect a row the user already read: keep
+            // the local read when the incoming copy is unread. This is what makes
+            // repeated FCM delivery idempotent for read state as well as row count.
+            next = { ...item, read_at: existing.read_at };
+        }
+    }
+
+    const withoutItem = current.items.filter(candidate => !isSameNotification(candidate, next));
 
     return {
         ...current,
-        items: cap([item, ...withoutItem].sort(byNewestFirst)),
+        items: cap([next, ...withoutItem].sort(byNewestFirst)),
         updatedAt: new Date().toISOString(),
     };
 }

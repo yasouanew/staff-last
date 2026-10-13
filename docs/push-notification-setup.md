@@ -3,11 +3,12 @@
 This document covers the **online** (FCM transport) push notification path:
 backend → Firebase Cloud Messaging → mobile device.
 
-> **Offline notifications do not exist in this system.** There is no local
-> inbox. Notifications are persisted server-side and fetched by the app when it
-> has network access. "Offline" only means a previously delivered push remains
-> visible in the device's notification shade. See
-> [Offline behaviour](#offline-behaviour) for detail.
+> **There is now a local offline inbox.** A push is persisted into a device-local
+> inbox so its content survives a dismissed tray entry and is readable with no
+> network. The server's `notifications` table remains the system of record, and a
+> reconnect sync reconciles the two. See
+> [`docs/offline-notification-inbox.md`](offline-notification-inbox.md) and
+> [`docs/connectivity-recovery.md`](connectivity-recovery.md).
 
 ---
 
@@ -224,21 +225,45 @@ Expected results:
 
 ## Offline behaviour
 
-There is no offline inbox. Specifically:
-
 - FCM is a **transport only**. The system of record is the backend `notifications`
   table, read via `GET /api/v1/notifications`.
-- When a push arrives, the app does **not** write the payload into local state.
-  It invalidates React Query caches and refetches from the API.
-- Therefore, with no network, the list shows whatever was last cached. New
-  notifications sent while offline appear once connectivity returns.
+- When a push arrives, the app **persists the payload into a device-local inbox**
+  (AsyncStorage) *and* invalidates React Query caches. The inbox is what the
+  notification screen renders, so it works with no network.
 - A push that arrives while the device is offline is buffered by FCM (up to 4
   weeks for a high-priority message with a TTL) and delivered on reconnect. A
   message with no TTL and the device offline is dropped.
+- A notification the device never received by push is recovered by the reconnect
+  sync, which fetches `GET /notifications?since=<watermark>` and merges the gap
+  into the local inbox.
 
-If a true offline inbox is ever required, it needs a new local persistence layer
-(SQLite/MMKV) plus a background handler that writes into it — that is separate
-work and is not implemented.
+See [`docs/offline-notification-inbox.md`](offline-notification-inbox.md) for the
+inbox and [`docs/connectivity-recovery.md`](connectivity-recovery.md) for the
+reconnect pipeline.
+
+---
+
+## Native prerequisites verification
+
+These are the platform-level requirements that must hold for a push to be
+delivered at all. They are **independent of the app code** and each fails
+silently, so verify them separately when push "does not work".
+
+| # | Prerequisite | How to verify | Failure symptom |
+|---|--------------|---------------|-----------------|
+| 1 | **Firebase config present** | `android/app/google-services.json` and `ios/StaffSaaSMobile/GoogleService-Info.plist` exist, and `FCM_ENABLED=true` in the build's `.env`. | `env.fcm.enabled` is false; every push entry point short-circuits. |
+| 2 | **Android notification channel registered** | The app calls `ensureAndroidNotificationChannel()` on init; the id matches `FCM_ANDROID_CHANNEL_ID` and the backend's `FIREBASE_ANDROID_CHANNEL_ID`. | Android 8+ routes to the fallback channel: no heads-up banner, no sound. |
+| 3 | **Android 13+ runtime permission** | `POST_NOTIFICATIONS` is in the merged manifest **and** the user granted it. | Notifications are silently dropped; `hasPermission` reports `denied`. |
+| 4 | **iOS Push Notifications capability** | Xcode → target → Signing & Capabilities → *Push Notifications* is present. | No APNs registration; `getToken()` never resolves. |
+| 5 | **iOS Background Modes → Remote notifications** | Same screen → *Background Modes* → *Remote notifications* checked. | Data-only messages never wake the app. |
+| 6 | **APNs key uploaded to Firebase** | Firebase console → Project settings → Cloud Messaging → APNs Authentication Key. | iOS delivery fails while Android works. |
+| 7 | **Backend payload has platform blocks** | `FcmChannel` sends `AndroidConfig.notification.channel_id` and a full `ApnsConfig` (see Step 3). | Android silent / iOS silent, depending on which block is missing. |
+| 8 | **Queue worker running** | All five push notifications implement `ShouldQueue`. | Nothing is ever sent; no error is surfaced. |
+
+> **Force-stopped apps do not run JavaScript.** Android and iOS may deliver a
+> visible notification without invoking the background handler. The durable record
+> is the server's notification table, and the reconnect sync is the fallback — do
+> not treat the background handler as guaranteed to run.
 
 ---
 

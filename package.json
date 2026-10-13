@@ -1,6 +1,6 @@
 {
   "name": "StaffSaaSMobile",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -17,6 +17,7 @@
     "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-native-community/blur": "^4.4.1",
+    "@react-native-community/netinfo": "^11.4.1",
     "@react-native-firebase/app": "^26.4.0",
     "@react-native-firebase/messaging": "^26.4.0",
     "@react-native/new-app-screen": "0.87.1",

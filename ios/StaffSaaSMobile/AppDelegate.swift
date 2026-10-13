@@ -44,7 +44,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "StaffSaaSMobile",
+      withModuleName: "Rosta",
       in: window,
       launchOptions: launchOptions
     )

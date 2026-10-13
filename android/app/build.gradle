@@ -3,6 +3,42 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 /**
+ * Windows MAX_PATH (260-char) workaround for CMake/Ninja.
+ *
+ * react-native-gesture-handler's codegen shadow-node object path exceeds the
+ * Windows 260-character limit when the project lives at a deep path such as
+ * `c:\laragon\www\StaffSaaSMobile\...`, failing the release native build with:
+ *   "ninja: error: Stat(...): Filename longer than 260 characters"
+ *
+ * When the `RN_SHORT_BUILD_DIR` environment variable is set (e.g. `C:\rnbuild`),
+ * relocate the app's build directory AND the CMake/Ninja `.cxx` staging
+ * directory to that short root. Both must move, because AGP writes native
+ * intermediates to `<app>/.cxx` (a sibling of `build/`, not under it), and that
+ * path is the one that overflows. This is opt-in: with the variable absent,
+ * normal developer builds are completely unaffected.
+ */
+def shortBuildRoot = System.getenv("RN_SHORT_BUILD_DIR")
+if (shortBuildRoot != null && !shortBuildRoot.trim().isEmpty()) {
+    def shortRootFile = file(shortBuildRoot.trim())
+    rootProject.allprojects { p ->
+        if (p.plugins.hasPlugin("com.android.application")) {
+            // Move the Java/JS/resource build outputs.
+            p.layout.buildDirectory.set(new File(shortRootFile, p.name))
+            // Move the CMake/Ninja (.cxx) native intermediates too.
+            p.afterEvaluate {
+                try {
+                    p.android.externalNativeBuild.cmake.buildStagingDirectory =
+                        new File(shortRootFile, "${p.name}-cxx")
+                } catch (ignored) {
+                    // Older AGP DSL: fall back to the legacy property.
+                    p.ext.buildStagingDirectory = new File(shortRootFile, "${p.name}-cxx")
+                }
+            }
+        }
+    }
+}
+
+/**
  * Google Services plugin.
  *
  * Applied conditionally, matching `settings.gradle`: it hard-fails the build when
@@ -101,6 +137,23 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.staffsaasmobile"
+
+    /**
+     * Windows MAX_PATH (260-char) workaround for CMake/Ninja.
+     *
+     * AGP writes native intermediates to <app>/.cxx (a sibling of build/).
+     * On Windows with a deep project path this overflows 260 chars, causing:
+     *   ninja: error: Stat(...): Filename longer than 260 characters
+     *
+     * Declaring buildStagingDirectory here (not in afterEvaluate) ensures it
+     * is applied before AGP configures CMake so Ninja uses the short root.
+     */
+    externalNativeBuild {
+        cmake {
+            buildStagingDirectory "C:\\rnbuild\\cxx"
+        }
+    }
+
     defaultConfig {
         applicationId "com.staffsaasmobile"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -115,15 +168,25 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // These values are read from android/gradle.properties.
+            // Keep the credentials out of version control in real deployments.
+            if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
+                storeFile file(MYAPP_UPLOAD_STORE_FILE)
+                storePassword MYAPP_UPLOAD_STORE_PASSWORD
+                keyAlias MYAPP_UPLOAD_KEY_ALIAS
+                keyPassword MYAPP_UPLOAD_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
+            // Sign release builds with the dedicated Play upload key.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
