@@ -42,7 +42,9 @@ workflows:
     environment:
       # Node 22 is required by package.json's engines field.
       node: 22.11.0
-      xcode: latest
+      # React Native 0.87 requires Xcode >= 16.1; `latest` resolves to that or
+      # newer on Codemagic's macOS images. Pin explicitly to avoid a regression.
+      xcode: 16.4
       cocoapods: default
       groups:
         - ro_secrets

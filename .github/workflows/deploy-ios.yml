@@ -39,8 +39,9 @@ on:
 
 jobs:
   deploy:
-    # macos-14 is Apple Silicon and ships a recent Xcode (15/16).
-    runs-on: macos-14
+    # macos-15 is Apple Silicon and ships Xcode 16.x, which React Native 0.87
+    # requires (>= 16.1). macos-14's default Xcode 15.4 is too old for the Podfile.
+    runs-on: macos-15
     env:
       BUNDLE_ID: com.staffsaasmobile
       XCODE_WORKSPACE: ios/StaffSaaSMobile.xcworkspace
@@ -58,8 +59,23 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode.app
+      - name: Select Xcode (>= 16.1 required by React Native 0.87)
+        run: |
+          set -e
+          echo "Available Xcode versions:"
+          ls -d /Applications/Xcode*.app || true
+          # Pick the newest Xcode that is >= 16.1. Falls back to the default if
+          # none matches (which will fail loudly later rather than silently use 15.4).
+          CANDIDATE=$(ls -d /Applications/Xcode*.app 2>/dev/null \
+            | grep -E 'Xcode_1[6-9]\.|Xcode_1[6-9]\.app' \
+            | sort -V | tail -n 1)
+          if [ -n "$CANDIDATE" ]; then
+            echo "Selecting $CANDIDATE"
+            sudo xcode-select -switch "$CANDIDATE"
+          else
+            echo "No Xcode >= 16 found; keeping default."
+          fi
+          xcodebuild -version
 
       - name: Install JavaScript dependencies
         run: npm ci
