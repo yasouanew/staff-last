@@ -10,11 +10,19 @@ prepare_react_native_project!
 
 # Firebase.
 #
-# `@react-native-firebase/*` pods are autolinked from `use_native_modules!` below, but
-# the underlying `Firebase*` pods require modular headers to be importable from Swift.
-# Setting `USE_FRAMEWORKS` is one way to achieve that; the supported, less invasive
-# approach for RNFirebase is `$RNFirebaseAsStaticFramework = true` together with the
-# `use_modular_headers!` directive that the package's own podspecs expect.
+# `@react-native-firebase/*` pods are autolinked from `use_native_modules!` below.
+# RNFirebase 26.x resolves the underlying Firebase SDK via Swift Package Manager
+# by default, but SPM is incompatible with static pod linkage: the SPM products
+# are automatic (statically-linked) libraries, so each RNFB pod would embed its
+# own copy of FirebaseCore/FirebaseMessaging and the app link would fail with
+# duplicate symbols — `pod install` refuses this combination outright
+# ("SPM + static linkage is not supported").
+#
+# This project uses static linkage (no `use_frameworks!` is declared), so SPM is
+# disabled here and Firebase resolves through CocoaPods instead — the supported
+# combination. `$RNFirebaseAsStaticFramework = true` keeps the RNFB pods as
+# static frameworks so their Swift code stays importable without `use_frameworks!`.
+$RNFirebaseDisableSPM = true
 $RNFirebaseAsStaticFramework = true
 
 linkage = ENV['USE_FRAMEWORKS']
@@ -32,9 +40,10 @@ target 'StaffSaaSMobile' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  # Firebase SDK (analytics + messaging). `firebase-ios-sdk` is pulled transitively by
-  # the RNFirebase podspecs, so no explicit pod is required here — only the Podfile
-  # platform (15.1, set by `min_ios_version_supported`) and static framework flag above.
+  # Firebase SDK (app + messaging) resolves through CocoaPods (SPM is disabled
+  # above) and is pulled transitively by the RNFirebase podspecs, so no explicit
+  # pod is required here — only the Podfile platform (15.1, set by
+  # `min_ios_version_supported`) and the flags above.
 
   post_install do |installer|
     react_native_post_install(
