@@ -1,0 +1,171 @@
+# GitHub Actions — build and upload the iOS app to TestFlight.
+#
+# Triggers on a push to `main` (and can be run manually from the Actions tab).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB SECRETS  (Settings → Secrets and variables → Actions)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   APP_STORE_CONNECT_KEY_ID          App Store Connect API key ID (10 chars)
+#   APP_STORE_CONNECT_ISSUER_ID       App Store Connect API issuer ID (UUID)
+#   APP_STORE_CONNECT_PRIVATE_KEY     The full contents of the AuthKey_XXXX.p8 file
+#
+#   BUILD_CERTIFICATE_BASE64          Base64 of your Apple Distribution .p12
+#   P12_PASSWORD                      Password used when exporting the .p12
+#   PROVISIONING_PROFILE_BASE64       Base64 of the App Store provisioning profile (.mobileprovision)
+#   KEYCHAIN_PASSWORD                 Any random string (used for a temp keychain)
+#
+#   GOOGLE_SERVICE_INFO_B64           Base64 of ios/StaffSaaSMobile/GoogleService-Info.plist
+#   ENV_FILE_PRODUCTION_B64           Base64 of .env.production
+#
+# The GoogleService-Info.plist and the .env file are gitignored, so they MUST be
+# injected here — without them the build succeeds but push notifications and the
+# API base URL are missing in the shipped app.
+#
+# Generate the Base64 values (macOS/Linux):
+#   base64 -i AuthKey_XXXX.p8 | pbcopy
+#   base64 -i ios/StaffSaaSMobile/GoogleService-Info.plist | pbcopy
+#   base64 -i .env.production | pbcopy
+# Windows PowerShell:
+#   [Convert]::ToBase64String([IO.File]::ReadAllBytes("<file>")) | Set-Clipboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # allows manual runs from the Actions tab
+
+jobs:
+  deploy:
+    # macos-14 is Apple Silicon and ships a recent Xcode (15/16).
+    runs-on: macos-14
+    env:
+      BUNDLE_ID: com.staffsaasmobile
+      XCODE_WORKSPACE: ios/StaffSaaSMobile.xcworkspace
+      XCODE_SCHEME: StaffSaaSMobile
+      # react-native-config reads this at build time.
+      ENVFILE: .env
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Quality gates (lint, typecheck, tests)
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test -- --ci
+
+      - name: Inject environment (react-native-config)
+        run: |
+          echo "${{ secrets.ENV_FILE_PRODUCTION_B64 }}" | base64 --decode > .env
+          grep -q '^API_BASE_URL=' .env || { echo 'API_BASE_URL missing from .env'; exit 1; }
+
+      - name: Inject Firebase plist (iOS push config)
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_B64 }}" | base64 --decode > ios/StaffSaaSMobile/GoogleService-Info.plist
+          plutil -lint ios/StaffSaaSMobile/GoogleService-Info.plist
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Install Apple Distribution certificate & provisioning profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -e
+          CERT_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
+
+          # Create a temporary keychain and import the certificate into it.
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Install the provisioning profile.
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build and archive the app
+        run: |
+          set -e
+          # The provisioning profile installed above is matched by bundle id from
+          # ~/Library/MobileDevice/Provisioning Profiles.
+          xcodebuild archive \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/StaffSaaSMobile.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}"
+
+      - name: Export the IPA
+        run: |
+          set -e
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>destination</key>
+            <string>export</string>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/StaffSaaSMobile.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/ipa"
+
+      - name: Upload to TestFlight
+        env:
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          KEY_PRIVATE: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          set -e
+          # The upload-testflight-build action needs the API key on disk.
+          mkdir -p ~/private_keys
+          echo -n "$KEY_PRIVATE" > ~/private_keys/AuthKey_"$KEY_ID".p8
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/ipa/StaffSaaSMobile.ipa" \
+            --apiKey "$KEY_ID" \
+            --apiIssuer "$ISSUER_ID"

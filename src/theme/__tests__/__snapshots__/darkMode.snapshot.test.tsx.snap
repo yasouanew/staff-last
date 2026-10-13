@@ -241,7 +241,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the da
             "lineHeight": 14,
             "textTransform": "uppercase",
           },
-          null,
+          {
+            "color": "#F2F5F9",
+          },
           null,
           {
             "color": "#3ECF9A",
@@ -287,7 +289,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the da
             "lineHeight": 14,
             "textTransform": "uppercase",
           },
-          null,
+          {
+            "color": "#F2F5F9",
+          },
           null,
           {
             "color": "#E5B45C",
@@ -333,7 +337,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the da
             "lineHeight": 14,
             "textTransform": "uppercase",
           },
-          null,
+          {
+            "color": "#F2F5F9",
+          },
           null,
           {
             "color": "#F26D64",
@@ -983,7 +989,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the da
                 "fontWeight": "500",
                 "lineHeight": 16,
               },
-              null,
+              {
+                "color": "#F2F5F9",
+              },
               null,
               [
                 {
@@ -1353,7 +1361,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the da
                 "fontWeight": "500",
                 "lineHeight": 16,
               },
-              null,
+              {
+                "color": "#F2F5F9",
+              },
               null,
               [
                 {
@@ -1615,7 +1625,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the li
             "lineHeight": 14,
             "textTransform": "uppercase",
           },
-          null,
+          {
+            "color": "#0F1722",
+          },
           null,
           {
             "color": "#0E8A5F",
@@ -1661,7 +1673,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the li
             "lineHeight": 14,
             "textTransform": "uppercase",
           },
-          null,
+          {
+            "color": "#0F1722",
+          },
           null,
           {
             "color": "#B7791F",
@@ -1707,7 +1721,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the li
             "lineHeight": 14,
             "textTransform": "uppercase",
           },
-          null,
+          {
+            "color": "#0F1722",
+          },
           null,
           {
             "color": "#C4322B",
@@ -2355,7 +2371,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the li
                 "fontWeight": "500",
                 "lineHeight": 16,
               },
-              null,
+              {
+                "color": "#0F1722",
+              },
               null,
               [
                 {
@@ -2725,7 +2743,9 @@ exports[`dark mode — dual-scheme snapshots renders the theme surface in the li
                 "fontWeight": "500",
                 "lineHeight": 16,
               },
-              null,
+              {
+                "color": "#0F1722",
+              },
               null,
               [
                 {

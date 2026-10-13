@@ -348,7 +348,14 @@ describe('Data Handling — attachment upload', () => {
     });
 
     it('rejects an upload whose response violates the leave-request contract', async () => {
-        harness.server.post('/leave-requests', () => ok({ id: 101 }, 'Created'));
+        /*
+         * `POST /leave-requests` returns a *partial* resource and
+         * `createdLeaveRequestSchema` only requires `id` (see
+         * `src/features/leave/validation/apiSchemas.ts`), so `{ id }` is a valid
+         * 201 body. To exercise a real contract violation the `id` must be the
+         * wrong type — a create response the resource schema cannot accept.
+         */
+        harness.server.post('/leave-requests', () => ok({ id: 'not-a-number' }, 'Created'));
 
         const error = (await rejectionOf(
             leaveApi.create({
