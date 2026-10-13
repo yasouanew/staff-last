@@ -38,7 +38,7 @@ workflows:
     instance_type: mac_mini_m2
     integrations:
       # Must match the App Store Connect API key name you create in the UI.
-      app_store_connect: app_store_connect_ro
+      app_store_connect: codemagicKey
     environment:
       # Node 22 is required by package.json's engines field.
       node: 22.11.0
@@ -128,6 +128,7 @@ workflows:
       # `submit` / `cancel_previous_submissions` options here.
       app_store_connect:
         auth: integration
+        submit_to_testflight: true
         # Set to true to push straight to App Store review instead of TestFlight:
         # submit_to_app_store: false
       email:
