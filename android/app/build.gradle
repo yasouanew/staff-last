@@ -158,8 +158,10 @@ android {
         applicationId "com.staffsaasmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // Keep in sync with package.json "version", Xcode MARKETING_VERSION, and
+        // APP_VERSION in the .env files. versionCode must increase on every upload.
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
     }
     signingConfigs {
         debug {

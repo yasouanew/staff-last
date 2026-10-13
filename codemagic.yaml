@@ -1,0 +1,252 @@
+# Codemagic CI/CD configuration — Rosta (StaffSaaSMobile)
+#
+# Two release workflows:
+#   * ios-release      → archive + export an App Store .ipa (TestFlight / App Store)
+#   * android-release  → build a signed .aab (Play Store) and .apk
+#
+# SECRETS ARE INJECTED, NOT COMMITTED. The Firebase config files and the
+# production `.env` are gitignored (see .gitignore), so a Codemagic build MUST
+# supply them as Base64 secrets or the shipped app will have no push and no
+# backend URL.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED CODEMAGIC SETUP (do this once in the Codemagic UI)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 1. App Store Connect integration (iOS signing)
+#    Team settings → Integrations → App Store Connect → add an API key.
+#    Name it exactly: `app_store_connect_ro` (or rename it below to match).
+#    Codemagic uses it to create/download provisioning profiles automatically
+#    (automatic code signing) — no manual profiles needed.
+#
+# 2. Android keystore (Android signing)
+#    Create a `keystore` named `ro_android_keystore` in the Codemagic UI, OR
+#    base64-encode your .jks and provide KEYSTORE_BASE64 + the passwords via an
+#    environment variable group.
+#
+# 3. Environment variable group `ro_secrets` (encrypted) containing:
+#      ENV_FILE_PRODUCTION_B64    → base64 of your `.env.production`
+#      GOOGLE_SERVICE_INFO_B64    → base64 of ios/StaffSaaSMobile/GoogleService-Info.plist
+#      GOOGLE_SERVICES_JSON_B64   → base64 of android/app/google-services.json
+#      KEYSTORE_BASE64            → base64 of your Android release keystore (.jks)
+#      KEYSTORE_PASSWORD          → Android keystore store password
+#      KEY_ALIAS                  → Android key alias
+#      KEY_PASSWORD               → Android key password
+#
+#    The Android workflow passes these to Gradle as the -P properties that
+#    android/app/build.gradle's `signingConfigs.release` block already reads:
+#    MYAPP_UPLOAD_STORE_FILE / MYAPP_UPLOAD_STORE_PASSWORD /
+#    MYAPP_UPLOAD_KEY_ALIAS / MYAPP_UPLOAD_KEY_PASSWORD.
+#
+#    Generate each Base64 value locally (macOS/Linux):
+#      base64 -i .env.production | pbcopy
+#      base64 -i ios/StaffSaaSMobile/GoogleService-Info.plist | pbcopy
+#      base64 -i android/app/google-services.json | pbcopy
+#      base64 -i android/app/release.keystore | pbcopy
+#    On Windows PowerShell:
+#      [Convert]::ToBase64String([IO.File]::ReadAllBytes(".env.production")) | Set-Clipboard
+#
+# NOTE: The Firebase files are gitignored, so without the two *_B64 variables the
+# build will succeed but push notifications will be DEAD in the shipped app
+# (AppDelegate guards FirebaseApp.configure() behind a file-existence check).
+# ─────────────────────────────────────────────────────────────────────────────
+
+workflows:
+  # ───────────────────────────────────────────────────────────────────────────
+  # iOS — App Store / TestFlight
+  # ───────────────────────────────────────────────────────────────────────────
+  ios-release:
+    name: iOS Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      # Matches the App Store Connect API key name you create in the UI.
+      app_store_connect: app_store_connect_ro
+    environment:
+      # Node 22 is required by package.json's engines field.
+      node: 22.11.0
+      xcode: latest
+      cocoapods: default
+      groups:
+        - ro_secrets
+      vars:
+        # Which dotenv file react-native-config injects. Its contents are
+        # written to `.env` by the "Inject environment" script below.
+        ENVFILE: .env
+        BUNDLE_ID: com.staffsaasmobile
+        XCODE_PROJECT: ios/StaffSaaSMobile.xcodeproj
+        XCODE_WORKSPACE: ios/StaffSaaSMobile.xcworkspace
+        XCODE_SCHEME: StaffSaaSMobile
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    scripts:
+      - name: Install JavaScript dependencies
+        script: |
+          set -e
+          npm ci
+
+      - name: Quality gates (lint, typecheck, tests)
+        script: |
+          set -e
+          npm run lint
+          npm run typecheck
+          npm test -- --ci
+
+      - name: Inject environment (react-native-config)
+        script: |
+          set -e
+          # Decode the production dotenv file into `.env`, which the Podfile and the
+          # React Native build phases read via $ENVFILE at build time.
+          echo "$ENV_FILE_PRODUCTION_B64" | base64 --decode > .env
+          echo "[env] wrote $(wc -l < .env) lines to .env"
+          # Fail loudly if the production backend host is missing.
+          grep -q '^API_BASE_URL=' .env || { echo 'API_BASE_URL missing from .env'; exit 1; }
+
+      - name: Inject Firebase plist (iOS push config)
+        script: |
+          set -e
+          echo "$GOOGLE_SERVICE_INFO_B64" | base64 --decode > ios/StaffSaaSMobile/GoogleService-Info.plist
+          test -f ios/StaffSaaSMobile/GoogleService-Info.plist
+          # Confirm it is a real plist, not an empty decode.
+          plutil -lint ios/StaffSaaSMobile/GoogleService-Info.plist
+
+      - name: Set up code signing (automatic)
+        script: |
+          set -e
+          keychain initialize
+          # Fetches/creates the App Store distribution certificate + profile for
+          # the bundle id, using the App Store Connect integration above.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          cd ios
+          pod install --repo-update
+
+      - name: Build iOS .ipa
+        script: |
+          set -e
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - '*.dSYM.zip'
+      - '*.dSYM'
+
+    publishing:
+      # Upload to TestFlight (App Store Connect) automatically on a v* tag.
+      # The build still has to be submitted for review manually unless you add
+      # `submit` / `cancel_previous_submissions` options here.
+      app_store_connect:
+        auth: integration
+        # Set to true to push straight to App Store review instead of TestFlight:
+        # submit_to_app_store: false
+      email:
+        recipients:
+          - dev@infinitsofts.online
+        notify:
+          success: true
+          failure: true
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Android — Play Store (.aab) + installable .apk
+  # ───────────────────────────────────────────────────────────────────────────
+  android-release:
+    name: Android Release
+    max_build_duration: 120
+    instance_type: linux_x2
+    environment:
+      node: 22.11.0
+      java: 17
+      android_sdk: 35
+      groups:
+        - ro_secrets
+      vars:
+        ENVFILE: .env
+        PACKAGE_NAME: com.staffsaasmobile
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    scripts:
+      - name: Install JavaScript dependencies
+        script: |
+          set -e
+          npm ci
+
+      - name: Quality gates (lint, typecheck, tests)
+        script: |
+          set -e
+          npm run lint
+          npm run typecheck
+          npm test -- --ci
+
+      - name: Inject environment (react-native-config)
+        script: |
+          set -e
+          echo "$ENV_FILE_PRODUCTION_B64" | base64 --decode > .env
+          grep -q '^API_BASE_URL=' .env || { echo 'API_BASE_URL missing from .env'; exit 1; }
+
+      - name: Inject Firebase config (Android push)
+        script: |
+          set -e
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > android/app/google-services.json
+          test -f android/app/google-services.json
+
+      - name: Set up Android keystore
+        script: |
+          set -e
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "ERROR: KEYSTORE_BASE64 is not set — cannot sign a release build." >&2
+            exit 1
+          fi
+          # build.gradle resolves MYAPP_UPLOAD_STORE_FILE relative to android/app/.
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+          test -s android/app/release.keystore
+          echo "[android] release keystore written"
+
+      - name: Build Android App Bundle + APK
+        script: |
+          set -e
+          cd android
+          # Pass signing properties as -P so the gitignored gradle.properties
+          # placeholders are overridden without writing secrets to disk.
+          ./gradlew bundleRelease assembleRelease --no-daemon \
+            -PMYAPP_UPLOAD_STORE_FILE=release.keystore \
+            -PMYAPP_UPLOAD_STORE_PASSWORD="$KEYSTORE_PASSWORD" \
+            -PMYAPP_UPLOAD_KEY_ALIAS="$KEY_ALIAS" \
+            -PMYAPP_UPLOAD_KEY_PASSWORD="$KEY_PASSWORD"
+          cd ..
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      # Create a Google Play service-account integration named `google_play_ro`
+      # in the Codemagic UI to enable automatic upload.
+      # google_play:
+      #   credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+      #   track: internal
+      email:
+        recipients:
+          - dev@infinitsofts.online
+        notify:
+          success: true
+          failure: true
