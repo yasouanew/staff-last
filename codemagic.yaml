@@ -83,9 +83,9 @@ workflows:
             exit 1
           fi
           # Strip any surrounding whitespace/newlines the UI may have captured, then
-          # decode. `-d` and `--decode` are equivalent; `-i` tolerates stray newlines
-          # inside the value if the secret was pasted in wrapped form.
-          printf '%s' "$ENV_FILE_PRODUCTION_B64" | tr -d '\r\n ' | base64 -d -i > .env
+          # decode. This runs on a macOS runner, where `base64` is BSD base64: it
+          # tolerates newlines and accepts `--decode`/`-D`, but NOT GNU's `-i`.
+          printf '%s' "$ENV_FILE_PRODUCTION_B64" | tr -d '\r\n ' | base64 --decode > .env
           echo "[env] wrote $(wc -l < .env) lines to .env"
           # Fail loudly if the production backend host is missing.
           grep -q '^API_BASE_URL=' .env || {
@@ -103,7 +103,7 @@ workflows:
             echo "Add it to the ro_secrets Codemagic variable group (Teams → Global variables)." >&2
             exit 1
           fi
-          printf '%s' "$GOOGLE_SERVICE_INFO_B64" | tr -d '\r\n ' | base64 -d -i > ios/StaffSaaSMobile/GoogleService-Info.plist
+          printf '%s' "$GOOGLE_SERVICE_INFO_B64" | tr -d '\r\n ' | base64 --decode > ios/StaffSaaSMobile/GoogleService-Info.plist
           test -s ios/StaffSaaSMobile/GoogleService-Info.plist
           # Confirm it is a real plist, not an empty decode.
           plutil -lint ios/StaffSaaSMobile/GoogleService-Info.plist

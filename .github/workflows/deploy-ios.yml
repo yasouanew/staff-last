@@ -82,7 +82,10 @@ jobs:
             echo "::error::ENV_FILE_PRODUCTION_B64 is empty or not set. Add it at Settings → Secrets and variables → Actions → New repository secret (Base64 of .env.production)."
             exit 1
           fi
-          printf '%s' "$ENV_FILE_PRODUCTION_B64" | tr -d '\r\n ' | base64 -d -i > .env
+          # NOTE: this runner is macOS, whose base64 is BSD base64. BSD base64
+          # tolerates newlines in the input and only accepts -D/-d to decode — it
+          # does NOT support GNU's `-i`. Keep this POSIX-decode form.
+          printf '%s' "$ENV_FILE_PRODUCTION_B64" | tr -d '\r\n ' | base64 --decode > .env
           echo "[env] wrote $(wc -l < .env) lines to .env"
           grep -q '^API_BASE_URL=' .env || {
             echo "::error::API_BASE_URL missing from decoded .env"
@@ -99,7 +102,7 @@ jobs:
             echo "::error::GOOGLE_SERVICE_INFO_B64 is empty or not set. Add it at Settings → Secrets and variables → Actions → New repository secret (Base64 of ios/StaffSaaSMobile/GoogleService-Info.plist)."
             exit 1
           fi
-          printf '%s' "$GOOGLE_SERVICE_INFO_B64" | tr -d '\r\n ' | base64 -d -i > ios/StaffSaaSMobile/GoogleService-Info.plist
+          printf '%s' "$GOOGLE_SERVICE_INFO_B64" | tr -d '\r\n ' | base64 --decode > ios/StaffSaaSMobile/GoogleService-Info.plist
           test -s ios/StaffSaaSMobile/GoogleService-Info.plist
           plutil -lint ios/StaffSaaSMobile/GoogleService-Info.plist
 
