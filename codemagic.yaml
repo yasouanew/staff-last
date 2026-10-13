@@ -75,18 +75,36 @@ workflows:
       - name: Inject environment (react-native-config)
         script: |
           set -e
-          # Decode the production dotenv file into `.env`, which the Podfile and the
-          # React Native build phases read via $ENVFILE at build time.
-          echo "$ENV_FILE_PRODUCTION_B64" | base64 --decode > .env
+          # Fail with a clear message if the secret is absent — otherwise `base64`
+          # silently decodes nothing and produces an empty `.env`.
+          if [ -z "$ENV_FILE_PRODUCTION_B64" ]; then
+            echo "ERROR: ENV_FILE_PRODUCTION_B64 is empty or not set." >&2
+            echo "Add it to the ro_secrets Codemagic variable group (Teams → Global variables)." >&2
+            exit 1
+          fi
+          # Strip any surrounding whitespace/newlines the UI may have captured, then
+          # decode. `-d` and `--decode` are equivalent; `-i` tolerates stray newlines
+          # inside the value if the secret was pasted in wrapped form.
+          printf '%s' "$ENV_FILE_PRODUCTION_B64" | tr -d '\r\n ' | base64 -d -i > .env
           echo "[env] wrote $(wc -l < .env) lines to .env"
           # Fail loudly if the production backend host is missing.
-          grep -q '^API_BASE_URL=' .env || { echo 'API_BASE_URL missing from .env'; exit 1; }
+          grep -q '^API_BASE_URL=' .env || {
+            echo "ERROR: API_BASE_URL missing from decoded .env" >&2
+            echo "First 5 lines of .env:" >&2
+            head -n 5 .env >&2
+            exit 1
+          }
 
       - name: Inject Firebase plist (iOS push config)
         script: |
           set -e
-          echo "$GOOGLE_SERVICE_INFO_B64" | base64 --decode > ios/StaffSaaSMobile/GoogleService-Info.plist
-          test -f ios/StaffSaaSMobile/GoogleService-Info.plist
+          if [ -z "$GOOGLE_SERVICE_INFO_B64" ]; then
+            echo "ERROR: GOOGLE_SERVICE_INFO_B64 is empty or not set." >&2
+            echo "Add it to the ro_secrets Codemagic variable group (Teams → Global variables)." >&2
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICE_INFO_B64" | tr -d '\r\n ' | base64 -d -i > ios/StaffSaaSMobile/GoogleService-Info.plist
+          test -s ios/StaffSaaSMobile/GoogleService-Info.plist
           # Confirm it is a real plist, not an empty decode.
           plutil -lint ios/StaffSaaSMobile/GoogleService-Info.plist
 

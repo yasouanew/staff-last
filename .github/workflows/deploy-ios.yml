@@ -71,13 +71,36 @@ jobs:
           npm test -- --ci
 
       - name: Inject environment (react-native-config)
+        env:
+          ENV_FILE_PRODUCTION_B64: ${{ secrets.ENV_FILE_PRODUCTION_B64 }}
         run: |
-          echo "${{ secrets.ENV_FILE_PRODUCTION_B64 }}" | base64 --decode > .env
-          grep -q '^API_BASE_URL=' .env || { echo 'API_BASE_URL missing from .env'; exit 1; }
+          set -e
+          # Fail with a clear message if the secret is absent — GitHub substitutes
+          # an empty string for an undefined secret, which would otherwise produce
+          # a silent empty `.env`.
+          if [ -z "$ENV_FILE_PRODUCTION_B64" ]; then
+            echo "::error::ENV_FILE_PRODUCTION_B64 is empty or not set. Add it at Settings → Secrets and variables → Actions → New repository secret (Base64 of .env.production)."
+            exit 1
+          fi
+          printf '%s' "$ENV_FILE_PRODUCTION_B64" | tr -d '\r\n ' | base64 -d -i > .env
+          echo "[env] wrote $(wc -l < .env) lines to .env"
+          grep -q '^API_BASE_URL=' .env || {
+            echo "::error::API_BASE_URL missing from decoded .env"
+            head -n 5 .env
+            exit 1
+          }
 
       - name: Inject Firebase plist (iOS push config)
+        env:
+          GOOGLE_SERVICE_INFO_B64: ${{ secrets.GOOGLE_SERVICE_INFO_B64 }}
         run: |
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_B64 }}" | base64 --decode > ios/StaffSaaSMobile/GoogleService-Info.plist
+          set -e
+          if [ -z "$GOOGLE_SERVICE_INFO_B64" ]; then
+            echo "::error::GOOGLE_SERVICE_INFO_B64 is empty or not set. Add it at Settings → Secrets and variables → Actions → New repository secret (Base64 of ios/StaffSaaSMobile/GoogleService-Info.plist)."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICE_INFO_B64" | tr -d '\r\n ' | base64 -d -i > ios/StaffSaaSMobile/GoogleService-Info.plist
+          test -s ios/StaffSaaSMobile/GoogleService-Info.plist
           plutil -lint ios/StaffSaaSMobile/GoogleService-Info.plist
 
       - name: Install CocoaPods
