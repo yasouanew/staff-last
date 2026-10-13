@@ -1,0 +1,29 @@
+# ESLint ignore patterns.
+#
+# `npm run lint` runs `eslint .`, which otherwise recurses into nested projects
+# and build output that are NOT part of this app. A stray nested project with
+# its own `.eslintrc.js` (e.g. extending `@react-native-community`, which this
+# repo does not install) would abort the whole lint run.
+
+# Reference/scratch UI kit — not part of the app, ships its own ESLint config.
+soft-ui-react-native-main/
+
+# Local-only scratch folder.
+New folder/
+
+# Build output and native generated code.
+node_modules/
+android/
+ios/
+build/
+coverage/
+.bundle/
+
+# Generated/bundled JS.
+*.jsbundle
+bundle-out.js
+
+# Standalone diagnostic scripts (not part of the app source tree).
+tmp-*.js
+tmp-*.tsx
+probe-*.js

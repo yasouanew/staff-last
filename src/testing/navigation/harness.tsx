@@ -66,7 +66,6 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import { __resetUnauthorizedCooldown } from '../../api/client';
 import { clearToken, saveToken } from '../../api/tokenStore';
-import { queryClientConfig } from '../../config/queryConfig';
 import { SECURE_KEYS } from '../../config/storageKeys';
 import { useSessionStore } from '../../features/auth/store/sessionStore';
 import type { AuthUser } from '../../features/auth/types';

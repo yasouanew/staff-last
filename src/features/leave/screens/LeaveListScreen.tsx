@@ -93,7 +93,11 @@ export function LeaveListScreen({ navigation }: Props): React.JSX.Element {
         });
 
         return unsubscribe;
-    }, [navigation, query.isPending, query.refetch, pendingQuery.refetch]);
+        // `query` / `pendingQuery` are the hook results from `useLeaveRequests`; the
+        // listener reads `.isPending` and `.refetch` from them. Depending on the whole
+        // objects (rather than destructured members) is what the exhaustive-deps rule
+        // expects and keeps the closure in sync with the latest render.
+    }, [navigation, query, pendingQuery]);
 
     // Reset accumulation when the filter changes.
     useEffect(() => {
