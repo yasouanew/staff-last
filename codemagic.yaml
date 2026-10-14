@@ -42,9 +42,10 @@ workflows:
     environment:
       # Node 22 is required by package.json's engines field.
       node: 22.11.0
-      # React Native 0.87 requires Xcode >= 16.1; `latest` resolves to that or
-      # newer on Codemagic's macOS images. Pin explicitly to avoid a regression.
-      xcode: 16.4
+      # Apple now REQUIRES the iOS 26 SDK (Xcode 26+) for App Store uploads:
+      # "All iOS and iPadOS apps must be built with the iOS 26 SDK or later."
+      # React Native 0.87 also needs >= 16.1, which 26 satisfies.
+      xcode: 26.0
       cocoapods: default
       groups:
         - ro_secrets

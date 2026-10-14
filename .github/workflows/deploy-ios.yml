@@ -50,9 +50,11 @@ on:
 
 jobs:
   deploy:
-    # macos-15 is Apple Silicon and ships Xcode 16.x, which React Native 0.87
-    # requires (>= 16.1). macos-14's default Xcode 15.4 is too old for the Podfile.
-    runs-on: macos-15
+    # macos-26 ships Xcode 26, which Apple now REQUIRES for App Store uploads
+    # ("This app was built with the iOS 18.5 SDK. All iOS and iPadOS apps must be
+    # built with the iOS 26 SDK or later, included in Xcode 26 or later").
+    # It also satisfies React Native 0.87's Xcode >= 16.1 requirement.
+    runs-on: macos-26
     env:
       BUNDLE_ID: com.staffsaasmobile
       XCODE_WORKSPACE: ios/StaffSaaSMobile.xcworkspace
@@ -70,21 +72,24 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Select Xcode (>= 16.1 required by React Native 0.87)
+      - name: Select Xcode 26 (required for App Store uploads + RN 0.87)
         run: |
           set -e
           echo "Available Xcode versions:"
           ls -d /Applications/Xcode*.app || true
-          # Pick the newest Xcode that is >= 16.1. Falls back to the default if
-          # none matches (which will fail loudly later rather than silently use 15.4).
-          CANDIDATE=$(ls -d /Applications/Xcode*.app 2>/dev/null \
-            | grep -E 'Xcode_1[6-9]\.|Xcode_1[6-9]\.app' \
-            | sort -V | tail -n 1)
+          # Prefer Xcode 26 (Apple requires the iOS 26 SDK for uploads). Fall back
+          # to the newest 16/17/18/19 build only if 26 is absent.
+          CANDIDATE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$CANDIDATE" ]; then
+            CANDIDATE=$(ls -d /Applications/Xcode*.app 2>/dev/null \
+              | grep -E 'Xcode_1[6-9]\.' | sort -V | tail -n 1)
+          fi
           if [ -n "$CANDIDATE" ]; then
             echo "Selecting $CANDIDATE"
             sudo xcode-select -switch "$CANDIDATE"
           else
-            echo "No Xcode >= 16 found; keeping default."
+            echo "::error::No suitable Xcode found (need 26+ for App Store uploads)."
+            exit 1
           fi
           xcodebuild -version
 
