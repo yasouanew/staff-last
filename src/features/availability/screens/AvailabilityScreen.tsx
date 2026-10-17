@@ -1,5 +1,5 @@
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 
 import { AppCard } from '../../../components/AppCard';
@@ -82,16 +82,47 @@ export function AvailabilityScreen(_props: Props): React.JSX.Element {
     );
 
     /*
-     * Re-initialise the slice whenever the server week changes — the initial load,
-     * a pull-to-refresh, or the refetch that follows a successful save. The effect
-     * is keyed on the memoised `availability` array, so it does not fire on every
-     * render and cannot wipe edits mid-typing.
+     * Re-seed the slice only when the *server week's values* change — the initial
+     * load, a pull-to-refresh that returned different data, or the refetch after a
+     * successful save.
+     *
+     * ## Why a value fingerprint rather than the array reference
+     *
+     * The previous dependency was `query.availability`. That is a `useMemo` over
+     * `query.data`, but the hook returns a freshly-memoised object on every TanStack
+     * observer transition, so the array can arrive with a new identity while carrying
+     * identical values. Each such identity change dispatched `init`, which rebuilds
+     * **both** `days` and `original` from the server week — silently reverting the
+     * user's edit and resetting the dirty baseline so `isDirty` became false. The
+     * visible result was a toggle that looked switched on (the switch and the row's
+     * expansion ref are local, so they held their own state) while the Save button
+     * stayed greyed and the unsaved banner never appeared, because both read the
+     * now-false `isDirty`. It read as "Save only responds to the first change".
+     *
+     * Comparing a serialised fingerprint keeps the re-seed at the moments that
+     * genuinely need it, and makes it impossible for a query-state change with no new
+     * data to discard an in-progress edit.
      */
+    const serverWeekFingerprint = weekFingerprint(query.availability);
+    const seededFingerprint = useRef<string | null>(null);
+
     useEffect(() => {
-        if (!query.isLoading && !query.isError && !query.isUnsupported) {
-            dispatch({ type: 'init', days: toWeekDrafts(query.availability) });
+        if (query.isLoading || query.isError || query.isUnsupported) {
+            return;
         }
-    }, [query.availability, query.isLoading, query.isError, query.isUnsupported]);
+
+        // Nothing new from the server — leave the user's draft exactly as it is.
+        if (seededFingerprint.current === serverWeekFingerprint) {
+            return;
+        }
+
+        seededFingerprint.current = serverWeekFingerprint;
+        dispatch({ type: 'init', days: toWeekDrafts(query.availability) });
+        // `query.availability` is intentionally not a dependency: the fingerprint is
+        // the change signal, and depending on the array would reintroduce the
+        // identity-driven reset this effect exists to prevent.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [serverWeekFingerprint, query.isLoading, query.isError, query.isUnsupported]);
 
     const refreshControl = (
         <RefreshControl
@@ -343,6 +374,30 @@ export function AvailabilityScreen(_props: Props): React.JSX.Element {
             />
         </View>
     );
+}
+
+/**
+ * A stable, comparable representation of a server availability week.
+ *
+ * Only the fields the editor round-trips are included, in a fixed order, so two
+ * weeks with identical values always produce the same string and two weeks that
+ * differ in anything the user can edit always produce different ones. Slot order is
+ * normalised because [`toWeekDrafts`](src/features/availability/utils/availabilityWeek.ts:62)
+ * reduces each day to its first slot by start time — a reordering by the server must
+ * not look like an edit.
+ */
+function weekFingerprint(items: { day_of_week: number; is_available: boolean; start_time: string | null; end_time: string | null }[]): string {
+    return items
+        .slice()
+        .sort((a, b) => {
+            if (a.day_of_week !== b.day_of_week) {
+                return a.day_of_week - b.day_of_week;
+            }
+
+            return (a.start_time ?? '').localeCompare(b.start_time ?? '');
+        })
+        .map(item => `${item.day_of_week}:${item.is_available ? 1 : 0}:${item.start_time ?? ''}:${item.end_time ?? ''}`)
+        .join('|');
 }
 
 const styles = StyleSheet.create({

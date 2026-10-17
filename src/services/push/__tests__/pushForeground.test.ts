@@ -9,9 +9,16 @@ import { initializePushService } from '../pushService';
 /**
  * Foreground delivery.
  *
- * FCM never shows a message while the app is foregrounded, so the service must
- * re-post it through Notifee (a visible heads-up banner) and route a tap on that
- * banner back to the caller. These tests pin both halves of that contract.
+ * FCM delivers foreground messages to the app **without** the OS rendering them,
+ * so the service decides between two cases:
+ *
+ * - a message **with** a `notification` block is rendered by the OS (Android posts it
+ *   to the tray; iOS presents the `aps.alert`), so the service must NOT re-post it —
+ *   doing so produces a duplicate banner for one event;
+ * - a **data-only** message is rendered by nobody, so the service must post it through
+ *   Notifee itself.
+ *
+ * These tests pin that rule, the persistence side effect, and foreground tap routing.
  */
 
 type MessageHandler = (message: unknown) => void;
@@ -90,11 +97,26 @@ afterEach(() => {
 });
 
 describe('foreground messages', () => {
-    it('re-posts the message as a visible notification on the configured channel', async () => {
+    it('does NOT re-post a message that carries a notification block (the OS renders it)', async () => {
         onMessageHandler?.({
             messageId: 'm1',
             data: { type: 'roster.published', title: 'Roster published', body: 'Your roster is ready.' },
             notification: { title: 'Roster published', body: 'Your roster is ready.' },
+        });
+
+        // The display call is fire-and-forget; let the microtask queue drain.
+        await Promise.resolve();
+
+        // Re-posting here is what produced the duplicate banner for one event.
+        expect(notifee.displayNotification).not.toHaveBeenCalled();
+        // The durable row is still written.
+        expect(useNotificationInboxStore.getState().items).toHaveLength(1);
+    });
+
+    it('re-posts a data-only message on the configured channel (the OS renders nothing)', async () => {
+        onMessageHandler?.({
+            messageId: 'm2',
+            data: { type: 'roster.published', title: 'Roster published', body: 'Your roster is ready.' },
         });
 
         // The display call is fire-and-forget; let the microtask queue drain.

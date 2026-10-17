@@ -626,12 +626,31 @@ export async function initializePushService(nextHandlers: PushHandlers = {}): Pr
 
         unsubscribers.push(
             onMessage(messaging, message => {
-                // Foreground messages are never shown by the OS, so persist the row
-                // (the durable record) *and* re-post it through Notifee so the user
-                // actually sees a heads-up banner.
                 logger.info('[push] Foreground message received', message.messageId ?? '(no id)');
+
+                // Persist the durable row first, unconditionally.
                 void persistToInbox(message);
-                void displayNotification(message);
+
+                /*
+                 * Re-post through Notifee **only for a data-only message**.
+                 *
+                 * This mirrors the guard in the background handler
+                 * (see `registerBackgroundMessageHandler`) and is what prevents the
+                 * duplicate banner. A message that carries a `notification` block is
+                 * rendered by the OS itself — on Android the SDK posts it to the tray
+                 * even while the app is foregrounded, and on iOS APNs presents it via
+                 * the `aps.alert`. Calling `displayNotification` for such a message
+                 * therefore shows the user the *same* event twice, which is the exact
+                 * bug this guard fixes.
+                 *
+                 * A data-only message (no `notification` block) is rendered by nobody,
+                 * so the app must post it itself — the one case where a foreground
+                 * banner has to come from Notifee.
+                 */
+                if (message.notification === undefined) {
+                    void displayNotification(message);
+                }
+
                 handlers.onForegroundMessage?.(message);
             }),
         );

@@ -1,6 +1,7 @@
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -78,6 +79,43 @@ export function CreateLeaveRequestScreen({ navigation }: Props): React.JSX.Eleme
     const theme = useTheme();
     const leaveTypes = useLeaveTypes();
     const createRequest = useCreateLeaveRequest();
+
+    /*
+     * Pull the current leave-type catalogue every time this screen is entered.
+     *
+     * This is the "entered the screen" signal, and it has to be a focus effect
+     * rather than a mount effect. The screen is pushed as a *modal*, and React
+     * Navigation keeps stack entries mounted — so a user who backs out of Request
+     * Leave and opens it again reuses this already-mounted instance, and a
+     * mount-time refetch would never fire again. `useFocusEffect` fires on each
+     * focus, including that return.
+     *
+     * The `refetch` is fire-and-forget: the form renders immediately from cached
+     * types (the hook's `staleTime: 0` makes them a placeholder, not a source of
+     * truth) and swaps in the fresh list when it lands, so entry is never blocked on
+     * the network.
+     *
+     * `leaveTypes.retry` is used as the trigger because the hook exposes it with a
+     * stable identity (`useCallback` over TanStack's stable `query.refetch`). That
+     * stability is required, not incidental: `useFocusEffect` re-runs whenever its
+     * callback changes, so an unstable dep would turn this into a refetch on every
+     * query state change.
+     */
+    const hasFocused = useRef(false);
+    const retryLeaveTypes = leaveTypes.retry;
+
+    useFocusEffect(
+        useCallback(() => {
+            // The first focus coincides with the query's own mount fetch; refetching
+            // here as well would cancel and restart that in-flight request.
+            if (!hasFocused.current) {
+                hasFocused.current = true;
+                return;
+            }
+
+            retryLeaveTypes();
+        }, [retryLeaveTypes]),
+    );
     const employeeId = useSessionStore(state => state.user?.employee_id ?? null);
     const { canMutate, blockedReason } = useSessionValidity();
     const [attachments, setAttachments] = useState<LeaveAttachmentInput[]>([]);

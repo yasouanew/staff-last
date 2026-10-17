@@ -24,6 +24,14 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!--
+		Export compliance: the app only uses encryption that is exempt from the
+		US export documentation requirement (e.g. HTTPS/TLS via the OS). Declaring
+		this here lets App Store Connect skip the manual export-compliance question
+		on every upload.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
