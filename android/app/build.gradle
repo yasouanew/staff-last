@@ -114,9 +114,17 @@ react {
 }
 
 /**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
+ * Whether to run R8 on release builds (minify + obfuscate Java/Kotlin bytecode).
+ *
+ * MUST stay `true`. Google Play's DEX code-optimisation report flags apps below
+ * 25% obfuscation, and a previous closed-test upload scored 2% with a 23.8 MB
+ * uncompressed DEX because this was `false`. All the flags below
+ * (minifyEnabled, shrinkResources, proguardFiles) are inert without it.
+ *
+ * See docs/android-release-optimisation.md for the verification procedure and
+ * the list of keep rules that make this safe for React Native native modules.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -162,6 +170,24 @@ android {
         // APP_VERSION in the .env files. versionCode must increase on every upload.
         versionCode 1
         versionName "1.0.0"
+
+        /**
+         * Restrict the native libraries packaged in release artifacts.
+         *
+         * Play's own report already shows only `arm64-v8a` and `armeabi-v7a`
+         * being delivered to users (19,291 supported devices), yet the build was
+         * still producing x86/x86_64 slices that only exist for emulators. This
+         * filter drops those two ABIs from `bundleRelease`/`assembleRelease`,
+         * cutting build time and the per-ABI native payload without affecting
+         * any real device.
+         *
+         * Debug builds are unaffected: an ABI filter here belongs to the
+         * defaultConfig, so we re-add x86/x86_64 for debug below to keep local
+         * emulator installs working.
+         */
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
     }
     signingConfigs {
         debug {
@@ -184,13 +210,42 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            /*
+             * Re-add the emulator ABIs dropped by the defaultConfig filter so
+             * `npm run android` / Android Studio keep working on x86/x86_64
+             * images. Debug builds skip JS bundling via `debuggableVariants`.
+             */
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            }
         }
         release {
             // Sign release builds with the dedicated Play upload key.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.release
+
+            /*
+             * R8: shrink + obfuscate + optimise. This is what Play's DEX report
+             * measures. Reported obfuscation was 2%; anything under 25% risks
+             * reduced visibility and publishing capability on Google Play.
+             *
+             * Keep rules live in app/proguard-rules.pro — React Native, Firebase,
+             * Notifee, Reanimated, react-native-config and react-native-keychain
+             * all resolve classes and members reflectively and need explicit
+             * `-keep` entries or they crash at runtime in release only.
+             */
             minifyEnabled enableProguardInReleaseBuilds
+            shrinkResources enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+
+            /*
+             * R8 keeps this off by default. `testCoverageEnabled` and the
+             * debuggable flags must stay false so R8 removes debug hooks and the
+             * DEX optimiser is allowed to produce optimised code.
+             */
+            debuggable false
+            jniDebuggable false
+            testCoverageEnabled false
         }
     }
 }
