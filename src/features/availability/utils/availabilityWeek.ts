@@ -27,6 +27,34 @@ export const TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, index) => {
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+/**
+ * Coerce a server time to the `HH:MM` the editor works in.
+ *
+ * The backend serves `H:i:s` (`04:00:00`), and the normalisation for that lives
+ * in [`availabilitySchema`](src/features/availability/validation/apiSchemas.ts:1).
+ * This is the second line of defence: `toWeekDrafts` is also reachable from
+ * `result.availability` after a save and from any future caller that builds the
+ * array itself, so the guarantee that a draft only ever holds a 30-minute
+ * `HH:MM` value is enforced where the drafts are actually constructed.
+ *
+ * Without it, a seconds-bearing value makes `TIME_OPTIONS.includes()` false and
+ * `validateSlotTime` report a format error, which pins `isValid` to false and
+ * leaves the Save button permanently disabled — a state the user cannot clear
+ * by any edit on the screen.
+ */
+function canonicalTime(value: string | null): string | null {
+    if (value === null) {
+        return null;
+    }
+
+    const match = /^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(value.trim());
+    if (!match) {
+        return value;
+    }
+
+    return `${(match[1] ?? '00').padStart(2, '0')}:${match[2] ?? '00'}`;
+}
+
 function toMinutes(value: string): number {
     const [h, m] = value.split(':').map(Number);
     return (h ?? 0) * 60 + (m ?? 0);
@@ -77,8 +105,8 @@ export function toWeekDrafts(items: Availability[]): WeekDayDraft[] {
         return {
             day_of_week: day,
             is_available: first.is_available,
-            start_time: first.start_time,
-            end_time: first.end_time,
+            start_time: canonicalTime(first.start_time),
+            end_time: canonicalTime(first.end_time),
         };
     });
 }

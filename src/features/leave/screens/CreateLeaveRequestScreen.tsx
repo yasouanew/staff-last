@@ -29,8 +29,9 @@ import { AuthHeader } from '../../auth/components';
 import { LeaveTypeChips } from '../components';
 import { useCreateLeaveRequest, useLeaveTypes } from '../hooks';
 import type { LeaveAttachmentInput, LeaveType } from '../types';
+import { pickLeaveAttachments } from '../utils/attachmentPicker';
 import { useDatePicker } from '../utils/datePicker';
-import { previewTotalDays, validateAttachment } from '../utils/leaveRequest';
+import { previewTotalDays } from '../utils/leaveRequest';
 import {
     LEAVE_ATTACHMENT_MAX_COUNT,
     createLeaveRequestSchema,
@@ -56,6 +57,10 @@ const ADD_FILE_HEIGHT = 48;
 const ADD_FILE_RADIUS = 14;
 /** The spec's paperclip glyph size. */
 const PAPERCLIP_SIZE = 18;
+/** Leading paperclip on an attached file row — smaller than the button's. */
+const ATTACHMENT_ROW_ICON_SIZE = 16;
+/** Touch padding around the 18pt remove mark, to reach the 44pt target. */
+const ATTACHMENT_REMOVE_HIT_SLOP = 12;
 
 /**
  * Request Leave (spec Screen 9).
@@ -120,7 +125,12 @@ export function CreateLeaveRequestScreen({ navigation }: Props): React.JSX.Eleme
     const { canMutate, blockedReason } = useSessionValidity();
     const [attachments, setAttachments] = useState<LeaveAttachmentInput[]>([]);
     const [attachmentError, setAttachmentError] = useState<string | null>(null);
-    const [pendingFileName, setPendingFileName] = useState('');
+    /*
+     * A guard, not a disabled state: the platform picker takes a moment to present,
+     * and a second tap in that window makes `pick()` reject with `IN_PROGRESS`. This
+     * keeps the button honest without pretending the upload is running.
+     */
+    const [isPicking, setIsPicking] = useState(false);
 
     // One picker for the whole screen, not one per field.
     const picker = useDatePicker();
@@ -193,38 +203,50 @@ export function CreateLeaveRequestScreen({ navigation }: Props): React.JSX.Eleme
         /^\d{4}-\d{2}-\d{2}$/.test(endDate) &&
         endDate >= startDate;
 
-    const handleAddAttachment = (): void => {
-        const name = pendingFileName.trim();
-
-        if (!name) {
-            setAttachmentError('Enter a file name to attach (e.g. certificate.pdf).');
+    /**
+     * Opens the platform document picker and appends the chosen files.
+     *
+     * This replaces a text field that asked the user to *type* a filename and then
+     * invented a `file://<name>` URI. That control could never attach anything: the
+     * URI named a path the device did not have, so the multipart upload had no bytes
+     * behind it. The picker supplies a real `content://` (Android) or `file://` (iOS)
+     * URI plus the file's true size and MIME type.
+     *
+     * Validation lives in [`pickLeaveAttachments`](src/features/leave/utils/attachmentPicker.ts:148)
+     * so the rules are testable without a native module, and cancellation is
+     * reported as `cancelled` rather than as a failure.
+     */
+    const handleAddAttachment = async (): Promise<void> => {
+        if (isPicking) {
             return;
         }
 
-        if (attachments.length >= LEAVE_ATTACHMENT_MAX_COUNT) {
-            setAttachmentError(`You can attach up to ${LEAVE_ATTACHMENT_MAX_COUNT} files.`);
-            return;
-        }
-
-        const validation = validateAttachment(name);
-
-        if (validation) {
-            setAttachmentError(validation);
-            return;
-        }
-
-        const extension = name.split('.').pop()?.toLowerCase() ?? '';
-        const mimeType =
-            extension === 'pdf'
-                ? 'application/pdf'
-                : extension === 'doc' || extension === 'docx'
-                    ? 'application/msword'
-                    : `image/${extension === 'jpg' ? 'jpeg' : extension}`;
-
-        setAttachments(previous => [...previous, { uri: `file://${name}`, name, mimeType }]);
-        setPendingFileName('');
+        setIsPicking(true);
         setAttachmentError(null);
-        clearRootError();
+
+        try {
+            const remaining = LEAVE_ATTACHMENT_MAX_COUNT - attachments.length;
+
+            const result = await pickLeaveAttachments(
+                remaining,
+                attachments.map(item => item.name),
+            );
+
+            if (result.status === 'cancelled') {
+                // Backing out of the picker is not an error — show nothing.
+                return;
+            }
+
+            if (result.status === 'rejected') {
+                setAttachmentError(result.message);
+                return;
+            }
+
+            setAttachments(previous => [...previous, ...result.files]);
+            clearRootError();
+        } finally {
+            setIsPicking(false);
+        }
     };
 
     const handleRemoveAttachment = (name: string): void => {
@@ -546,6 +568,12 @@ export function CreateLeaveRequestScreen({ navigation }: Props): React.JSX.Eleme
                                 docx · 5MB each.
                             </AppText>
 
+                            {/*
+                             * One row per selected file, each with its own remove control.
+                             * The row shows the real filename the picker returned plus its
+                             * size, so the user can confirm they chose the right document
+                             * before submitting.
+                             */}
                             {attachments.length > 0 ? (
                                 <View style={styles.attachmentChips}>
                                     {attachments.map(item => (
@@ -556,21 +584,36 @@ export function CreateLeaveRequestScreen({ navigation }: Props): React.JSX.Eleme
                                                 styles.attachmentChip,
                                                 { backgroundColor: theme.colors.surfaceMuted },
                                             ]}>
-                                            <AppText
-                                                variant="caption"
-                                                color="text"
-                                                numberOfLines={1}
-                                                style={styles.attachmentChipName}>
-                                                {item.name}
-                                            </AppText>
+                                            <AppIcon
+                                                icon={PaperclipGlyph}
+                                                sizePoints={ATTACHMENT_ROW_ICON_SIZE}
+                                                color="textMuted"
+                                            />
+                                            <View style={styles.attachmentChipText}>
+                                                <AppText
+                                                    variant="caption"
+                                                    color="text"
+                                                    numberOfLines={1}>
+                                                    {item.name}
+                                                </AppText>
+                                                {item.size !== undefined ? (
+                                                    <AppText variant="caption" color="textMuted">
+                                                        {formatFileSize(item.size)}
+                                                    </AppText>
+                                                ) : null}
+                                            </View>
                                             <Pressable
                                                 accessibilityRole="button"
                                                 accessibilityLabel={`Remove ${item.name}`}
                                                 testID={`leave-attachment-remove-${item.name}`}
                                                 onPress={() => handleRemoveAttachment(item.name)}
-                                                hitSlop={8}>
-                                                <AppText variant="caption" color="danger">
-                                                    Remove
+                                                // The visual mark is 18pt, well under the 44pt
+                                                // platform minimum touch target, so the pressable
+                                                // is padded out to meet it.
+                                                hitSlop={ATTACHMENT_REMOVE_HIT_SLOP}
+                                                style={styles.attachmentRemove}>
+                                                <AppText variant="body" color="textMuted">
+                                                    ✕
                                                 </AppText>
                                             </Pressable>
                                         </View>
@@ -578,41 +621,53 @@ export function CreateLeaveRequestScreen({ navigation }: Props): React.JSX.Eleme
                                 </View>
                             ) : null}
 
-                            <TextField
-                                label="File name"
-                                placeholder="e.g. certificate.pdf"
-                                autoCapitalize="none"
-                                testID="leave-attachment-input"
-                                value={pendingFileName}
-                                onChangeText={text => {
-                                    setPendingFileName(text);
-                                    clearRootError();
-                                }}
-                                error={attachmentError ?? undefined}
-                            />
+                            {/*
+                             * A single action rather than an input: the file comes from
+                             * the device's own picker. Hidden once the cap is reached,
+                             * because the backend rejects a sixth file and offering the
+                             * button would promise something the request cannot accept.
+                             */}
+                            {attachments.length < LEAVE_ATTACHMENT_MAX_COUNT ? (
+                                <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Upload attachment"
+                                    accessibilityState={{ disabled: isPicking, busy: isPicking }}
+                                    testID="leave-attachment-add"
+                                    onPress={() => {
+                                        void handleAddAttachment();
+                                    }}
+                                    disabled={isPicking}
+                                    style={({ pressed }) => [
+                                        styles.addFile,
+                                        {
+                                            backgroundColor: pressed
+                                                ? theme.colors.surfaceSunken
+                                                : theme.colors.surfaceMuted,
+                                            opacity: isPicking ? 0.6 : 1,
+                                        },
+                                    ]}>
+                                    <AppIcon
+                                        icon={PaperclipGlyph}
+                                        sizePoints={PAPERCLIP_SIZE}
+                                        color="text"
+                                    />
+                                    <AppText variant="bodyStrong" color="text">
+                                        {isPicking ? 'Opening…' : 'Upload file'}
+                                    </AppText>
+                                </Pressable>
+                            ) : null}
 
-                            <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Add file"
-                                testID="leave-attachment-add"
-                                onPress={handleAddAttachment}
-                                style={({ pressed }) => [
-                                    styles.addFile,
-                                    {
-                                        backgroundColor: pressed
-                                            ? theme.colors.surfaceSunken
-                                            : theme.colors.surfaceMuted,
-                                    },
-                                ]}>
-                                <AppIcon
-                                    icon={PaperclipGlyph}
-                                    sizePoints={PAPERCLIP_SIZE}
-                                    color="text"
-                                />
-                                <AppText variant="bodyStrong" color="text">
-                                    Add file
+                            {attachmentError !== null ? (
+                                <AppText
+                                    variant="caption"
+                                    color="danger"
+                                    testID="leave-attachment-error"
+                                    // Announced when it appears, so a screen-reader user
+                                    // learns the file was rejected without moving focus.
+                                    accessibilityLiveRegion="polite">
+                                    {attachmentError}
                                 </AppText>
-                            </Pressable>
+                            ) : null}
                         </AppCard>
                     </View>
 
@@ -664,6 +719,27 @@ function formatDays(days: number): string {
     return `${days} day${days === 1 ? '' : 's'}`;
 }
 
+/**
+ * Byte count → a short human size, e.g. `48213` → "47 KB".
+ *
+ * Whole units only: the row exists so the user can confirm they picked the right
+ * document, and "47 KB" answers that. A decimal would imply a precision the
+ * attachment rules do not care about.
+ */
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+
+    const kilobytes = bytes / 1024;
+
+    if (kilobytes < 1024) {
+        return `${Math.round(kilobytes)} KB`;
+    }
+
+    return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
 const styles = StyleSheet.create({
     body: {
         paddingTop: 16,
@@ -710,14 +786,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
+        gap: 10,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 10,
     },
-    attachmentChipName: {
+    attachmentChipText: {
         flex: 1,
+        // Without `minWidth: 0` a long filename establishes a min-content width and
+        // pushes the remove control off the row.
         minWidth: 0,
+        gap: 2,
+    },
+    attachmentRemove: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        // A fixed square keeps the tap target stable regardless of filename length.
+        width: 24,
+        height: 24,
     },
     addFile: {
         height: ADD_FILE_HEIGHT,

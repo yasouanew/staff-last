@@ -1,12 +1,5 @@
-import { useEffect, useRef } from 'react';
-import {
-    LayoutAnimation,
-    Platform,
-    Pressable,
-    StyleSheet,
-    UIManager,
-    View,
-} from 'react-native';
+import { memo } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '../../../components/AppText';
 import { availabilityCopy, TIME_END_HINT, TIME_INPUT_HINT } from '../../../constants/copy';
@@ -35,15 +28,21 @@ import { TimeField } from './TimeField';
  * at module load.
  */
 
-// Android disables LayoutAnimation by default; enabling it is a one-time,
-// process-wide flag. Guarded because the new architecture (Fabric) exposes the
-// method but treats it as a no-op, and older builds may not expose it at all.
-if (
-    Platform.OS === 'android' &&
-    UIManager.setLayoutAnimationEnabledExperimental !== undefined
-) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+/*
+ * ## Why the row no longer arms `LayoutAnimation`
+ *
+ * It used to call `LayoutAnimation.configureNext` in an effect keyed on
+ * `is_available`, to animate the expansion of the time fields. On Fabric (RN
+ * 0.87) that configured layout animation is committed on the *next* frame, and
+ * `AvailabilitySwitch` starts its own `withTiming` in the same commit. The two
+ * animations target the same frame: the row's height changes, the switch's thumb
+ * jumps, but the track's `backgroundColor` — a plain style prop, not animated —
+ * can be committed from the pre-flip render. The toggle then appears to stay off
+ * while the reducer holds `is_available: true`, and the save bar enables against
+ * what looks like a stale screen. The expansion is now un-animated, which removes
+ * the competing commit entirely; the switch's own slide is the only animation on
+ * a toggle and it always matches the committed value.
+ */
 
 /** The spec's collapsed row height. */
 const ROW_HEIGHT = 64;
@@ -72,7 +71,16 @@ export type DayRowProps = {
     isLast?: boolean;
 };
 
-export function DayRow({
+/**
+ * `memo` on the row so a single toggle does not re-render the other six rows.
+ *
+ * The screen dispatches `updateDay` for one day, and the reducer returns a new
+ * `days` array where only the touched entry is a new object. Combined with the
+ * stable `useCallback`-free props (the handlers are recreated each render, so the
+ * comparison below ignores them deliberately — the day object is what changes)
+ * the untouched rows bail out and never restage their expansion.
+ */
+export const DayRow = memo(function DayRow({
     day,
     dayName,
     error,
@@ -83,17 +91,6 @@ export function DayRow({
     isLast = false,
 }: DayRowProps): React.JSX.Element {
     const theme = useTheme();
-
-    // Animate only when the expanded state actually flips, not on every keystroke
-    // in a time field — a layout animation per character would make typing stutter.
-    const wasExpanded = useRef(day.is_available);
-
-    useEffect(() => {
-        if (wasExpanded.current !== day.is_available) {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            wasExpanded.current = day.is_available;
-        }
-    }, [day.is_available]);
 
     const summary = !day.is_available
         ? availabilityCopy.unavailable
@@ -176,7 +173,7 @@ export function DayRow({
             ) : null}
         </View>
     );
-}
+});
 
 const styles = StyleSheet.create({
     row: {

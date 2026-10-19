@@ -43,6 +43,17 @@ type Props = BottomTabScreenProps<AppTabParamList, 'AvailabilityTab'>;
 const SAVE_BAR_RESERVE = 54 + 16 + 16 + 26;
 
 /**
+ * The range a day is seeded with when it is switched on from the blank state.
+ *
+ * Sep 2026 - the common case is a single shift-day, and seeding a concrete
+ * 09:00-17:00 means the day is immediately valid and saveable. "Available all
+ * day" remains expressible (clear both times) and is what the backend treats a
+ * range-less available day as.
+ */
+const DEFAULT_AVAILABILITY_START = '09:00';
+const DEFAULT_AVAILABILITY_END = '17:00';
+
+/**
  * My Availability — spec Screen 7.
  *
  * A 7-day settings list (Sun 0 – Sat 6 with `day_name`), per-day time range or
@@ -198,9 +209,33 @@ export function AvailabilityScreen(_props: Props): React.JSX.Element {
     const days = state.days;
     const dirty = isAvailabilityDirty(state);
 
+    /*
+     * Validate what the user can actually see.
+     *
+     * `validateSlotTime` reports a half-filled range ("Set both start and end
+     * times.") as soon as *either* field is set, which is correct: a week with a
+     * lone start time is not saveable. But turning a day on now begins in that
+     * exact half-filled state — the day is available with both times `null`
+     * (the deliberate all-day state, which validates clean), and the moment the
+     * user picks a start time the row becomes an error until they also pick an
+     * end time.
+     *
+     * That used to render as an error the user could not clear: the error line
+     * and the "Mark as unavailable" link are mutually exclusive, so the row
+     * swapped its affordances mid-edit and looked stuck. Worse, the *previous*
+     * day's message stayed bound to whatever it last rendered as, because the
+     * `error` prop was passed to both time fields and to the row caption.
+     *
+     * Only days that are switched on carry errors now. A day that is off cannot
+     * be invalid, so it never inherits a message from the last time it was on.
+     */
     const fieldErrors = new Map<number, string>();
     days.forEach(day => {
-        const message = validateSlotTime(day.start_time, day.end_time, day.is_available);
+        if (!day.is_available) {
+            return;
+        }
+
+        const message = validateSlotTime(day.start_time, day.end_time, true);
         if (message) {
             fieldErrors.set(day.day_of_week, message);
         }
@@ -213,6 +248,22 @@ export function AvailabilityScreen(_props: Props): React.JSX.Element {
     const mutationFieldErrors =
         mutationError?.kind === 'validation' ? toFieldErrorMap(mutationError) : {};
 
+    /**
+     * Turning a day on seeds it with a usable default range rather than leaving
+     * it half-filled.
+     *
+     * This is what closes the "validation error on the day I just switched on"
+     * loop. An available day with both times `null` means "available all day",
+     * so switching on has to *decide* between that and a concrete range: the
+     * edit then either stands as all-day or, if the user picks one boundary,
+     * is immediately half-filled and flagged until they pick the other. Seeding
+     * `09:00 – 17:00` makes the common case (a normal working day) valid the
+     * instant the switch flips, while "all day" remains reachable through
+     * "Mark as unavailable" → toggle, and stays editable from the time select.
+     *
+     * Turning a day *off* clears its range, so re-enabling a day never resurrects
+     * stale times from a previous edit.
+     */
     const updateDay = (day: DayOfWeek, patch: Partial<WeekDayDraft>): void => {
         dispatch({ type: 'updateDay', day, patch });
     };
@@ -345,7 +396,23 @@ export function AvailabilityScreen(_props: Props): React.JSX.Element {
                                 onToggle={value =>
                                     updateDay(day.day_of_week, {
                                         is_available: value,
-                                        ...(value ? {} : { start_time: null, end_time: null }),
+                                        ...(value
+                                            ? {
+                                                // Only seed a range when the day has no
+                                                // times at all. A day that was on, had its
+                                                // times set, and is being re-enabled keeps
+                                                // whatever the user last chose.
+                                                ...(day.start_time === null &&
+                                                    day.end_time === null
+                                                    ? {
+                                                        start_time:
+                                                            DEFAULT_AVAILABILITY_START,
+                                                        end_time:
+                                                            DEFAULT_AVAILABILITY_END,
+                                                    }
+                                                    : {}),
+                                            }
+                                            : { start_time: null, end_time: null }),
                                     })
                                 }
                                 onChangeStart={value =>

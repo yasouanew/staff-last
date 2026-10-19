@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -54,11 +54,41 @@ export function AvailabilitySwitch({
 }: AvailabilitySwitchProps): React.JSX.Element {
     const theme = useTheme();
 
-    // 0 = off (thumb left), 1 = on (thumb right). Seeded from the current value so
-    // the resting position is correct before the first animation runs.
+    /**
+     * Local optimistic mirror of `value`.
+     *
+     * ## Why the control cannot be *purely* controlled
+     *
+     * Every toggle on this screen is owned by the screen reducer, but this
+     * component is rendered by `DayRow`, which is a plain function component with
+     * no `React.memo`. Two independent things can therefore leave the switch
+     * showing a state the reducer never adopted:
+     *
+     *  1. `LayoutAnimation.configureNext` is armed in `DayRow`'s effect for the
+     *     flip, and this switch's own `withTiming` starts in the same commit. On
+     *     Fabric (the New Architecture used by RN 0.87) the layout animation's
+     *     frame can be committed *before* the animated style is applied, so the
+     *     thumb finishes its travel while the `backgroundColor` from the previous
+     *     render is still on screen — the row looks switched off even though
+     *     `is_available` is `true`. Re-tapping then sends the *new* `!value`, which
+     *     looks like "the toggle doesn't respond".
+     *  2. Any render of the parent that does not change `value` (a transient
+     *     re-render, a `savedMessage` clear, an undo/redo of the week) leaves the
+     *     thumb where the last animation stopped rather than where `value` says
+     *     it should be.
+     *
+     * Mirroring the prop into local state fixes both: the press paints
+     * immediately (the control is responsive even before the reducer's commit
+     * lands), and the effect below — keyed on the *prop*, not the local copy —
+     * re-asserts the authoritative value whenever the parent disagrees. If the
+     * reducer rejects the change, the mirror is pulled back to `value` instead of
+     * silently drifting.
+     */
+    const [visualValue, setVisualValue] = useState(value);
     const progress = useSharedValue(value ? 1 : 0);
 
     useEffect(() => {
+        setVisualValue(value);
         progress.value = withTiming(value ? 1 : 0, { duration: SLIDE_DURATION });
     }, [progress, value]);
 
@@ -66,12 +96,21 @@ export function AvailabilitySwitch({
         transform: [{ translateX: progress.value * THUMB_TRAVEL }],
     }));
 
+    const handlePress = (): void => {
+        const next = !value;
+        // Paint first so the control never feels dead, then hand the change to
+        // the owner. `value` (not `visualValue`) is the base of the negation: the
+        // parent is the single source of truth for what the toggle means.
+        setVisualValue(next);
+        onValueChange(next);
+    };
+
     return (
         <Pressable
             accessibilityRole="switch"
             accessibilityLabel={accessibilityLabel}
-            accessibilityState={{ checked: value }}
-            onPress={() => onValueChange(!value)}
+            accessibilityState={{ checked: visualValue }}
+            onPress={handlePress}
             // The painted track is 28pt tall, below the 44pt platform minimum, so
             // the touch area is widened without changing the visual geometry.
             hitSlop={theme.spacing.sm}
@@ -82,7 +121,7 @@ export function AvailabilitySwitch({
                     // Off track is the spec's `borderHairline`; on track is
                     // `success`. Both are scheme tokens, so the control re-tints
                     // in dark mode without a branch here.
-                    backgroundColor: value
+                    backgroundColor: visualValue
                         ? theme.colors.success
                         : theme.colors.borderHairline,
                 },

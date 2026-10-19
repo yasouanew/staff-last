@@ -72,5 +72,10 @@ module.exports = {
     // store is security-relevant, so the mock is a real in-memory keychain rather
     // than stubs — the token-store tests assert on what actually got persisted.
     '^react-native-keychain$': '<rootDir>/jest/react-native-keychain.mock.js',
+    // The document picker is a TurboModule used by the Request Leave attachment
+    // flow. Without this mapping, merely importing the screen reaches for the native
+    // module and fails the suite before any assertion runs.
+    '^@react-native-documents/picker$':
+      '<rootDir>/jest/react-native-documents-picker.mock.js',
   },
 };

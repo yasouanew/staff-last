@@ -1,7 +1,8 @@
+import { NavigationContext, useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { useCallback, useContext, useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -48,7 +49,7 @@ const HERO_GRADIENT_DARK: [string, string] = ['#1E4E9E', '#142F5E'];
  *  ┌───────────────────────────┐
  *  │  hero (gradient, fixed)   │  ← owns the top inset, bleeds under the status bar
  *  ├───────────────────────────┤
- *  │  body (ScrollView)        │  ← marginTop -16, rounded top corners
+ *  │  body (ScrollView)        │  ← marginTop -16, square top corners
  *  │   • Worked today (Bento)  │
  *  │   • Today section         │
  *  │   • shift cards           │
@@ -56,10 +57,16 @@ const HERO_GRADIENT_DARK: [string, string] = ['#1E4E9E', '#142F5E'];
  *  └───────────────────────────┘
  * ```
  *
- * The body is pulled up 16pt and given 28pt top corners, so it reads as a raised
- * sheet sliding over the hero rather than as a second stacked block. That overlap
- * is the whole "layered depth" of the Bento layout, and it is why the hero is a
- * sibling of the scroller rather than its `ListHeaderComponent`.
+ * The body is pulled up 16pt and its **top** corners are square, so it tucks
+ * *underneath* the hero's rounded lower edge rather than in front of it. The
+ * visible curve therefore belongs entirely to the hero, and the hero's own top
+ * edge stays flush with the physical display edge. Rounding the body's top
+ * corners as well — the earlier treatment — draws two curves that meet with a
+ * sliver of canvas between them, which is what read as a "floating card" on iOS.
+ *
+ * The hero is a sibling of the scroller rather than its `ListHeaderComponent`
+ * because it must be pinned: only a sibling can sit above the scrolling body
+ * while the body slides beneath its lower edge.
  *
  * ## Why a ScrollView, not a FlatList
  *
@@ -241,11 +248,100 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
 }
 
 /**
+ * The status-bar treatment this screen requires.
+ *
+ * The hero is brand blue in **both** schemes, so the glyphs drawn over it must be
+ * light regardless of the app's appearance. The app-level
+ * [`ThemedStatusBar`](App.tsx:98) derives its style from `theme.isDark`, which is
+ * right for white/charcoal screens but paints *dark* glyphs over this hero in
+ * light mode — the illegible pairing this screen used to have.
+ *
+ * ## Why this is focus-gated rather than simply mounted
+ *
+ * React Native resolves overlapping `<StatusBar>` components by mount order, and a
+ * bottom-tab navigator keeps every visited tab **mounted** after the first visit.
+ * An unconditionally rendered bar here would therefore keep forcing white glyphs
+ * on the Roster, Leave and Account tabs — all of which are light-surfaced — as soon
+ * as the user had opened Home once. Gating on `useIsFocused` mounts the bar only
+ * while this route is the active one; leaving Home unmounts it and React Native
+ * falls back to the app-level bar, which derives from the scheme again.
+ *
+ * `animated` keeps the flip from stepping, and `backgroundColor` is omitted
+ * because RN 0.87 is edge-to-edge — the hero's own gradient is what shows behind
+ * the bar. Android's bar is transparent and edge-to-edge too, so `light-content`
+ * is equally correct there and keeps the two platforms identical.
+ */
+
+/**
+ * The focused half of [`HeroStatusBar`](src/features/home/screens/HomeScreen.tsx:1).
+ *
+ * Split into its own component so `useIsFocused` is only ever *called* where a
+ * navigator exists — branching around a hook inside one component would break the
+ * Rules of Hooks.
+ */
+function FocusedStatusBar(): React.JSX.Element | null {
+    const isFocused = useIsFocused();
+
+    return isFocused ? <StatusBar barStyle="light-content" animated /> : null;
+}
+
+/**
+ * Pins the status bar to `light-content` while Home is the active route.
+ *
+ * Mounts the bar only when the hero is actually on screen, so the other tabs keep
+ * the app-level, scheme-derived bar — see the note above on why an unconditional
+ * mount is wrong in a tab navigator.
+ */
+function HeroStatusBar(): React.JSX.Element | null {
+    /*
+     * `useIsFocused` reads `NavigationContext` and throws when it is absent, so the
+     * context is consulted *before* the hook is reached. No navigator means this
+     * component was mounted in isolation (a preview or a unit mount), where the
+     * screen is by definition the only surface on display.
+     */
+    const hasNavigator = useContext(NavigationContext) !== undefined;
+
+    if (!hasNavigator) {
+        return <StatusBar barStyle="light-content" animated />;
+    }
+
+    return <FocusedStatusBar />;
+}
+
+/**
  * The fixed gradient hero.
  *
  * Owns the **top** inset: the fill runs behind the status bar/notch rather than
  * starting below it, which is what makes it read as a hero instead of a coloured
  * box. A screen that mounts it must not also apply `insets.top`.
+ *
+ * ## Geometry
+ *
+ * ```
+ * ┌─────────────────────────────┐  ← physical top edge of the display
+ * │  (status bar / notch / DI)  │     gradient paints behind it
+ * │  DATE                    (bell)
+ * │  Good morning, Alex
+ * │  Here is your day at a glance
+ * ╰─────────────────────────────╯  ← only the *bottom* corners are rounded
+ * ```
+ *
+ * Two rules make this work on iOS and must not be relaxed:
+ *
+ * 1. **No top radius.** `borderTopLeftRadius`/`borderTopRightRadius` are never set
+ *    here. Before they were introduced indirectly by the body's rounded sheet,
+ *    the pairing of two curves left a white sliver at the very top of the screen
+ *    on notched devices, which is the "floating card" artefact. The hero is a
+ *    full-bleed surface; only its lower edge is a curve.
+ * 2. **`insets.top` is padding, not margin.** The gradient's own box starts at
+ *    y=0 and the inset is added to its top padding, so date and bell clear the
+ *    Dynamic Island while the fill still spans the whole bar. Using a margin (or
+ *    a sibling spacer) would leave the canvas visible above the gradient.
+ *
+ * Inside a bottom-tab stack the screen area already starts at the display edge,
+ * so `insets.top` is the *real* status-bar height (~59pt on a Dynamic Island
+ * iPhone, 24pt on Android). On devices without a notch it is 0 and the 20pt
+ * content offset below is all the header needs.
  */
 function HomeHero({
     dateLine,
@@ -262,34 +358,51 @@ function HomeHero({
     const theme = useTheme();
 
     return (
-        <LinearGradient
-            colors={theme.isDark ? HERO_GRADIENT_DARK : HERO_GRADIENT_LIGHT}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={[styles.hero, { paddingTop: insets.top + 20 }]}>
-            <View style={styles.heroTopRow}>
-                <AppText style={styles.heroDate} numberOfLines={1}>
-                    {dateLine}
+        <>
+            {/*
+             * Scoped to this screen: mounted with the hero, released with it. The
+             * app-level bar resumes the moment the user leaves Home.
+             */}
+            <HeroStatusBar />
+
+            <LinearGradient
+                colors={theme.isDark ? HERO_GRADIENT_DARK : HERO_GRADIENT_LIGHT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                // Edge to edge: y=0 is the physical top of the display. The inset
+                // only pushes the *content* down, never the fill.
+                style={[styles.hero, { paddingTop: insets.top + 20 }]}>
+                <View style={styles.heroTopRow}>
+                    <AppText style={styles.heroDate} numberOfLines={1}>
+                        {dateLine}
+                    </AppText>
+                    {action}
+                </View>
+
+                <AppText style={styles.heroGreeting} numberOfLines={2} ellipsizeMode="tail">
+                    {greeting}
                 </AppText>
-                {action}
-            </View>
 
-            <AppText style={styles.heroGreeting} numberOfLines={2} ellipsizeMode="tail">
-                {greeting}
-            </AppText>
-
-            <AppText style={styles.heroSubline}>Here is your day at a glance</AppText>
-        </LinearGradient>
+                <AppText style={styles.heroSubline}>Here is your day at a glance</AppText>
+            </LinearGradient>
+        </>
     );
 }
 
 /**
  * Hero + overlapping body shell.
  *
- * The body is a `ScrollView` pulled up 16pt with 28pt top corners, so it slides
- * over the hero's lower edge. Its bottom padding reserves the tab bar's measured
- * height plus the home-indicator inset, so the last card is never trapped behind
- * the bar.
+ * The body is a `ScrollView` pulled up 16pt so it slides *under* the hero's
+ * rounded lower edge. Its top corners are square on purpose — see
+ * [`HomeHero`](src/features/home/screens/HomeScreen.tsx:1) for why two rounded
+ * edges meeting is what produced the floating-card look on iOS.
+ *
+ * All top-edge geometry lives in the hero. This shell applies **no** top inset of
+ * its own: the hero owns it, and repeating it here would push the date line down
+ * by a second status-bar height.
+ *
+ * Its bottom padding reserves the tab bar's measured height plus the
+ * home-indicator inset, so the last card is never trapped behind the bar.
  */
 function HomeShell({
     dateLine,
@@ -423,12 +536,26 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     hero: {
-        // Full-bleed: the gradient runs edge to edge and under the status bar.
+        /*
+         * Full-bleed on all four sides.
+         *
+         * `paddingTop` is applied inline from `insets.top` (see `HomeHero`), so the
+         * gradient's own box starts at y=0 and paints behind the status bar /
+         * Dynamic Island. Nothing may be added above it in the tree — a sibling
+         * spacer, a parent `SafeAreaView`, or a top margin on `root` would each
+         * leave the canvas visible as the white band this screen used to show.
+         */
         paddingHorizontal: 20,
         paddingBottom: 28,
-        // Rounded lower edge so the hero reads as a surface the body slides over.
+        /*
+         * Rounded **lower** edge only, so the hero reads as a surface the body
+         * slides over. The top corners are deliberately never rounded: a radius at
+         * the top would lift the fill off the display edge and reintroduce the
+         * floating-card look on notched iPhones.
+         */
         borderBottomLeftRadius: 28,
         borderBottomRightRadius: 28,
+        // No `borderTop*Radius` — see above.
     },
     heroTopRow: {
         alignItems: 'center',
@@ -459,10 +586,18 @@ const styles = StyleSheet.create({
     },
     body: {
         flex: 1,
-        // Pull the body up over the hero's lower edge for the layered overlap.
+        // Pull the body up under the hero's lower edge for the layered overlap.
         marginTop: -16,
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
+        /*
+         * Square top corners.
+         *
+         * The body tucks *behind* the hero rather than in front of it, so the only
+         * curve at the seam is the hero's 28pt lower edge. Rounding both surfaces
+         * produced two arcs meeting over a hairline of canvas — the "card floating
+         * below the status bar" artefact on iOS. Keeping this square also lets the
+         * body's own fill run flush to the hero, so a sub-pixel gap during a push
+         * transition shows `surfaceRaised` rather than the raw window background.
+         */
     },
     bodyContent: {
         paddingHorizontal: 20,

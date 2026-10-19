@@ -47,6 +47,64 @@ describe('availabilityWeek', () => {
         ).toEqual([1, 3, 4, 2]);
     });
 
+    describe('server times served as H:i:s', () => {
+        /**
+         * The live backend returns availability times with seconds
+         * (`04:00:00`), not the documented `H:i`. If those reach the draft
+         * unconverted they make every day permanently invalid, which pins the
+         * Save button disabled — the reported "save not interactive" bug.
+         */
+        const slot = (overrides: Record<string, unknown>) => ({
+            id: 1,
+            employee_id: 1,
+            day_of_week: 3 as const,
+            day_name: 'Wednesday',
+            is_available: true,
+            start_time: '04:00:00',
+            end_time: '01:00:00',
+            created_at: '2026-10-01T00:00:00+10:00',
+            updated_at: '2026-10-01T00:00:00+10:00',
+            ...overrides,
+        });
+
+        it('normalises seconds away when building drafts', () => {
+            const drafts = toWeekDrafts([
+                slot({ day_of_week: 3, start_time: '04:00:00', end_time: '01:00:00' }),
+            ]);
+
+            const wednesday = drafts.find(day => day.day_of_week === 3);
+
+            expect(wednesday?.start_time).toBe('04:00');
+            expect(wednesday?.end_time).toBe('01:00');
+        });
+
+        it('produces a value that is a member of the select options', () => {
+            const drafts = toWeekDrafts([slot({ day_of_week: 3, start_time: '04:00:00' })]);
+            const wednesday = drafts.find(day => day.day_of_week === 3);
+
+            expect(TIME_OPTIONS).toContain(wednesday?.start_time);
+        });
+
+        it('accepts a seconds-bearing time without a format error', () => {
+            // The end precedes the start here, so the *ordering* rule fires —
+            // but crucially not the format rule, which is what used to stick.
+            expect(validateSlotTime('04:00', '01:00', true)).toBe(
+                'End time must be after start time.',
+            );
+            expect(validateSlotTime('04:00', '01:00', true)).not.toBe(
+                'Use HH:MM 24-hour format.',
+            );
+        });
+
+        it('leaves a null time null', () => {
+            const drafts = toWeekDrafts([
+                slot({ day_of_week: 3, start_time: null, end_time: null }),
+            ]);
+
+            expect(drafts.find(day => day.day_of_week === 3)?.start_time).toBeNull();
+        });
+    });
+
     it('rejects end_time at or before start_time', () => {
         expect(validateSlotTime('09:00', '09:00', true)).toBe('End time must be after start time.');
         expect(validateSlotTime('17:00', '09:00', true)).toBe('End time must be after start time.');
