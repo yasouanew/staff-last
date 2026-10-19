@@ -51,8 +51,30 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
+	<!--
+		Full-screen opt-in for notched devices.
+
+		Registering `UILaunchScreen` is what tells iOS the app draws its own
+		content edge to edge on notched/Dynamic Island hardware. Without it, a
+		build linked against the iOS 14+ SDK is treated as a legacy app and the
+		window is inset *below* the status bar: the root view then starts after the
+		bar, `react-native-safe-area-context` reports `insets.top = 0`, and every
+		`insets.top`-padded header (the Home hero most visibly) collapses its top
+		padding while still painting a full-height background — the tall empty blue
+		band with crowded content seen on iPhone.
+
+		The dictionary is intentionally empty: it is the opt-in *marker*. The brand
+		splash is drawn in JS by `AppBootGate`/`SplashScreen`, so no UIKit launch
+		configuration (image, background colour) is needed here.
+
+		`UILaunchStoryboardName` is deliberately *not* also declared. The two keys
+		describe the same slot in two generations of the OS, and shipping both has
+		historically been the configuration in which the inset behaviour persists.
+		`LaunchScreen.storyboard` remains in the project, but is no longer
+		registered as the launch screen.
+	-->
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>
@@ -61,7 +83,20 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!--
+		Status-bar ownership.
+
+		`true` lets the view controller drive the bar style, which is the path
+		`react-native-screens` (used by native-stack) implements. That is what makes
+		a per-screen `<StatusBar>` in JS authoritative: the Home hero is brand blue in
+		both schemes, so its glyphs must be `light-content`, while every other,
+		light-surfaced screen keeps the scheme-derived style.
+
+		With `false` the style is pinned app-wide through `UIApplication` and the
+		navigator's view controllers cannot vary it per screen, so the hero rendered
+		with dark glyphs on blue.
+	-->
 	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
+	<true/>
 </dict>
 </plist>
