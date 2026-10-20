@@ -192,8 +192,15 @@ export function ScreenContainer({
             // indicator on iOS. `top` is expressed as content padding instead:
             // `contentInset.top` shifts the resting scroll position, which would
             // leave a gap above the first row that the user cannot scroll away.
-            contentInset={{ bottom: withBottomInset ? insets.bottom : 0 }}
+            contentInset={{ top: 0, bottom: withBottomInset ? insets.bottom : 0, left: 0, right: 0 }}
             scrollIndicatorInsets={{ bottom: withBottomInset ? insets.bottom : 0 }}
+            // Suppress iOS's automatic content inset adjustment. On iOS, the
+            // ScrollView silently adds `insets.top` to the content inset on top of
+            // the `paddingTop` already applied by `ScreenContainer`, producing a
+            // double top gap on iOS that does not occur on Android. Setting this to
+            // "never" keeps the app's manual safe-area handling as the single source
+            // of truth.
+            contentInsetAdjustmentBehavior="never"
             // Android has no contentInset; padding on the content container is the
             // cross-platform equivalent, and is already in `paddingStyle`.
             // NOT `clipsToBounds`: it is an iOS UIView property with no entry in
