@@ -124,15 +124,31 @@ function App(): React.JSX.Element {
   return (
     <GestureHandlerRootView style={styles.root}>
       {/*
-       * `ThemeProvider` sits above everything that reads a token — the status
-       * bar, the navigator and every screen — so a scheme change re-renders the
-       * whole tree from one value. It is deliberately *inside*
-       * `GestureHandlerRootView` (which is scheme-agnostic) and *outside*
-       * `QueryClientProvider` (which is not).
+       * `SafeAreaProvider` is the outermost wrapper inside `GestureHandlerRootView`.
+       *
+       * On iOS, `SafeAreaProvider` measures safe-area insets relative to its own
+       * bounds. If it is nested inside another View (e.g. `ThemedRoot`), that
+       * measurement is taken from the inner View's edge rather than from the physical
+       * display edge, producing an `insets.top` value that does not match the actual
+       * status-bar height. Screens that manually apply `paddingTop: insets.top` (like
+       * `HomeHero`) then double-offset: once from the native stack container's own
+       * automatic safe-area adjustment and once from the manually applied padding —
+       * which is exactly the excessive top gap visible on iOS but not on Android.
+       *
+       * Moving `SafeAreaProvider` here (directly inside the gesture root, before any
+       * other View) ensures it measures against the true physical edge on both
+       * platforms, making `insets.top` reliable for all consumers.
        */}
-      <ThemeProvider>
-        <ThemedRoot>
-          <SafeAreaProvider>
+      <SafeAreaProvider>
+        {/*
+         * `ThemeProvider` sits above everything that reads a token — the status
+         * bar, the navigator and every screen — so a scheme change re-renders the
+         * whole tree from one value. It is deliberately *inside*
+         * `GestureHandlerRootView` (which is scheme-agnostic) and *outside*
+         * `QueryClientProvider` (which is not).
+         */}
+        <ThemeProvider>
+          <ThemedRoot>
             <ThemedStatusBar />
 
             <QueryClientProvider client={queryClient}>
@@ -141,9 +157,9 @@ function App(): React.JSX.Element {
               <ConnectivityBridge />
               <RootNavigator />
             </QueryClientProvider>
-          </SafeAreaProvider>
-        </ThemedRoot>
-      </ThemeProvider>
+          </ThemedRoot>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

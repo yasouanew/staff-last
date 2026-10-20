@@ -583,19 +583,14 @@ const styles = StyleSheet.create({
         flex: 1,
         /*
          * A flex root under an iOS native-stack screen sizes itself from the
-         * *container* width/height, which is not necessarily the screen dimensions.
-         * Claiming the full width and pinning both x=0 and y=0 removes the horizontal
-         * and vertical offsets the iOS native-stack container can silently apply.
-         *
-         * `left: 0` + `width: '100%'` fix the horizontal axis (the original fix).
-         * `top: 0` fixes the vertical axis: without it the iOS screen container can
-         * shift the hero down, leaving a gap between the physical top edge and the
-         * gradient — the white/grey band visible in the screenshot. Android never
-         * shows this because its edge-to-edge mode does not add such offsets.
+         * *container* width, which is not necessarily the screen width. Claiming
+         * the full width explicitly — and pinning the box to x=0 — is what removes
+         * the horizontal margins the hero used to show on iOS. `'100%'` alone is
+         * intentionally paired with `left: 0` so an ancestor's horizontal padding
+         * cannot re-inset a child that is told to fill it.
          */
         width: '100%',
         left: 0,
-        top: 0,
     },
     hero: {
         /*
