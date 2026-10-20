@@ -84,19 +84,20 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<!--
-		Status-bar ownership.
+		Status-bar ownership — kept at `false` deliberately.
 
-		`true` lets the view controller drive the bar style, which is the path
-		`react-native-screens` (used by native-stack) implements. That is what makes
-		a per-screen `<StatusBar>` in JS authoritative: the Home hero is brand blue in
-		both schemes, so its glyphs must be `light-content`, while every other,
-		light-surfaced screen keeps the scheme-derived style.
+		This is the React Native default and it must not be flipped to `true` in this
+		app. With `true`, iOS asks the navigator's view controller for the bar style
+		via `childForStatusBarStyle`, and any container in the stack that does not
+		answer blanks the bar's appearance — observed on device as an entirely white
+		status bar (white background, invisible clock/battery/wifi glyphs).
 
-		With `false` the style is pinned app-wide through `UIApplication` and the
-		navigator's view controllers cannot vary it per screen, so the hero rendered
-		with dark glyphs on blue.
+		The app already drives the bar correctly through `<StatusBar>` in JS
+		([`ThemedStatusBar`](App.tsx:98) app-wide, plus the focus-scoped override in
+		the Home hero), which writes via `UIApplication.setStatusBarStyle` under this
+		`false` setting and works without a status-bar delegate in the navigator.
 	-->
 	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
+	<false/>
 </dict>
 </plist>

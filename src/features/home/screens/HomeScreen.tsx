@@ -39,6 +39,18 @@ const HERO_GRADIENT_LIGHT: [string, string] = ['#2260C2', '#1B4FA0'];
 const HERO_GRADIENT_DARK: [string, string] = ['#1E4E9E', '#142F5E'];
 
 /**
+ * Gap between the status bar and the hero's first row, in points.
+ *
+ * Matches the `spacing.sm` (12) breathing room
+ * [`AppHeader`](src/components/AppHeader/AppHeader.tsx:34) gives its content row
+ * below `insets.top`, so Home's masthead sits at the same optical height as every
+ * other screen's title. It is intentionally *not* a larger number: the hero's
+ * first row is a 40pt bell alongside an 11pt date, both vertical-centre aligned,
+ * so a bigger offset reads as a dead band rather than as padding.
+ */
+const HERO_TOP_GAP = 12;
+
+/**
  * Home dashboard (spec Screen 4).
  *
  * ## Structure
@@ -369,9 +381,17 @@ function HomeHero({
                 colors={theme.isDark ? HERO_GRADIENT_DARK : HERO_GRADIENT_LIGHT}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
-                // Edge to edge: y=0 is the physical top of the display. The inset
-                // only pushes the *content* down, never the fill.
-                style={[styles.hero, { paddingTop: insets.top + 20 }]}>
+                /*
+                 * Edge to edge: y=0 is the physical top of the display, and the
+                 * inset pushes only the *content* down — never the fill.
+                 *
+                 * The `+ HERO_TOP_GAP` is the single content offset below the
+                 * status bar, matching the `insets.top + spacing.sm` contract in
+                 * [`AppHeader`](src/components/AppHeader/AppHeader.tsx:34). This is
+                 * the **only** place the inset is consumed on this screen; see the
+                 * note on `HomeShell` about the automatic content inset.
+                 */
+                style={[styles.hero, { paddingTop: insets.top + HERO_TOP_GAP }]}>
                 <View style={styles.heroTopRow}>
                     <AppText style={styles.heroDate} numberOfLines={1}>
                         {dateLine}
@@ -432,6 +452,33 @@ function HomeShell({
                     styles.bodyContent,
                     { paddingBottom: insets.bottom + 24 + tabBarHeight },
                 ]}
+                /*
+                 * Suppress iOS's automatic content inset.
+                 *
+                 * This is the defect this screen shipped with. `HomeShell` is a
+                 * plain `View` directly under the native-stack screen container, and
+                 * that container's scroll view applies `contentInsetAdjustmentBehavior
+                 * = automatic` on iOS — silently adding `insets.top` to the content
+                 * on top of the hero's own `insets.top` padding. The visible result
+                 * was an empty band *above* the date line and the bell pushed toward
+                 * the header's lower edge, while Android (which has no such
+                 * automatic adjustment) rendered correctly.
+                 *
+                 * The working screens escaped it by accident of construction:
+                 * [`ScreenContainer`](src/components/ScreenContainer/ScreenContainer.tsx:195)
+                 * passes `contentInset`, which on iOS disables the automatic
+                 * adjustment, and its non-scrollable path supplies `paddingTop`
+                 * explicitly. The hero follows that contract — it is the one and only
+                 * inset consumer here — so the scroller must not add a second.
+                 *
+                 * `bottom` is still set explicitly to the tab-bar reservation the
+                 * content container already carries, so the inset dictionary is
+                 * well-formed on both platforms.
+                 */
+                contentInset={{ bottom: 0, left: 0, right: 0, top: 0 }}
+                scrollIndicatorInsets={{ bottom: 0 }}
+                automaticallyAdjustContentInsets={false}
+                contentInsetAdjustmentBehavior="never"
                 refreshControl={refreshControl}
                 showsVerticalScrollIndicator={false}>
                 {children}
