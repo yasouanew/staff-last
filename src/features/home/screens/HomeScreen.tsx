@@ -581,6 +581,16 @@ function NextUpCard({
 const styles = StyleSheet.create({
     root: {
         flex: 1,
+        /*
+         * A flex root under an iOS native-stack screen sizes itself from the
+         * *container* width, which is not necessarily the screen width. Claiming
+         * the full width explicitly — and pinning the box to x=0 — is what removes
+         * the horizontal margins the hero used to show on iOS. `'100%'` alone is
+         * intentionally paired with `left: 0` so an ancestor's horizontal padding
+         * cannot re-inset a child that is told to fill it.
+         */
+        width: '100%',
+        left: 0,
     },
     hero: {
         /*
@@ -592,6 +602,12 @@ const styles = StyleSheet.create({
          * spacer, a parent `SafeAreaView`, or a top margin on `root` would each
          * leave the canvas visible as the white band this screen used to show.
          */
+        // Stretch rather than measure: the gradient must span the full root width
+        // with no horizontal margin of its own. The gutter lives in
+        // `paddingHorizontal`, which paints *inside* the fill.
+        alignSelf: 'stretch',
+        width: '100%',
+        marginHorizontal: 0,
         paddingHorizontal: 20,
         paddingBottom: 28,
         /*
@@ -605,11 +621,20 @@ const styles = StyleSheet.create({
         // No `borderTop*Radius` — see above.
     },
     heroTopRow: {
+        width: '100%',
+        // The bell must never be pushed outside the hero. The row is a single
+        // line, so the date yields space (`heroDate` flexes) rather than the
+        // trailing control being clipped or wrapped off the right edge.
         alignItems: 'center',
         flexDirection: 'row',
         justifyContent: 'space-between',
     },
     heroDate: {
+        // Absorbs the leftover width and may shrink below its content width so a
+        // long weekday+date string truncates with `numberOfLines={1}` instead of
+        // displacing the bell past the right gutter.
+        flex: 1,
+        minWidth: 0,
         fontSize: 11,
         lineHeight: 14,
         fontWeight: '600',

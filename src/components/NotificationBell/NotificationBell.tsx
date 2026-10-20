@@ -95,6 +95,18 @@ const styles = StyleSheet.create({
         width: DISC_SIZE,
         height: DISC_SIZE,
         borderRadius: DISC_SIZE / 2,
+        /*
+         * Never participate in flex shrinking.
+         *
+         * The bell is the trailing slot of a `justifyContent: 'space-between'`
+         * hero row. On iOS, `flexShrink` defaults to 0 but a `Pressable` in a
+         * constrained row can still be compressed or clipped when the leading
+         * text refuses to truncate; pinning both axes keeps the 40pt disc fully
+         * visible and tappable. The leading date shrinks instead — see
+         * `heroDate` in HomeScreen.
+         */
+        flexShrink: 0,
+        flexGrow: 0,
         // Glass fill is applied inline so it can differ per scheme; see the
         // component body.
     },
