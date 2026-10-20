@@ -168,8 +168,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Keep in sync with package.json "version", Xcode MARKETING_VERSION, and
         // APP_VERSION in the .env files. versionCode must increase on every upload.
-        versionCode 4
-        versionName "1.0.3"
+        versionCode 5
+        versionName "1.0.4"
 
         /**
          * Restrict the native libraries packaged in release artifacts.
